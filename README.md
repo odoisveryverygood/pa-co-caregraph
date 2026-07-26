@@ -24,6 +24,13 @@ pending document proposals, drafts/edits/approves a sourced clinician-review
 note, derives an encounter timeline, and returns English/Spanish scripts for
 browser speech synthesis. Raw audio and raw image bytes are never persisted.
 
+The additive intelligence path pairs finalized English/Spanish transcript
+chunks with literal translations, produces an explicitly unverified live
+conversation draft, traverses only clinician-accepted facts for verified
+encounter analysis, generates gap/conflict-bound clarification questions,
+invalidates stale analysis by graph version, and assembles a final packet with
+separate verified, review-required, and unverified sections.
+
 Optional Jac `by llm()` helpers may propose unverified candidates, translate or
 simplify an approved brief, and select relevant verified IDs. Deterministic code
 validates every result and remains the only code that can mutate the graph.
@@ -55,6 +62,7 @@ Run the complete gate from the repository root:
 /Users/aradhyamishra/.local/bin/jac run tests/multimodal_server.jac
 /Users/aradhyamishra/.local/bin/jac run tests/production_demo.jac
 /Users/aradhyamishra/.local/bin/jac run tests/multimodal_demo.jac
+/Users/aradhyamishra/.local/bin/jac run tests/intelligence_demo.jac
 ```
 
 `production_demo.jac` executes 36 checks in each cycle, five cycles in each of
@@ -65,6 +73,12 @@ malformed MockLLM. That is 20 full cycles and 720 checked steps.
 timeline, audio, provenance, conflict, and reset flow three times in each of
 deterministic, missing-key fallback, and valid MockLLM modes: nine complete
 multimodal cycles.
+
+`intelligence_demo.jac` executes the complete 34-step bilingual translation,
+unverified-summary, verification, analysis, question, stale-version, final
+packet, voice/document trace, contradiction, and reset flow three times in
+each mandatory mode: disabled, valid MockLLM, and malformed MockLLM fallback.
+That is nine complete intelligence cycles.
 
 ## Canonical graph
 
@@ -90,6 +104,14 @@ CandidateFact -ExtractedFromDocument→ DocumentTextBlock
 Encounter -HasClinicianNote→ ClinicianNoteDraft -ContainsSection→ NoteSection
 NoteSection -NoteSupportedBy→ VerifiedFact
 Patient -HasAudioScript→ PatientAudioScript -AudioGeneratedFrom→ PatientBrief
+
+TranscriptChunk -TranslatedAs→ TranslatedTranscriptChunk
+Encounter -HasQuickSummary→ QuickSummaryDraft -SupportedByChunk→ TranscriptChunk
+Encounter -HasAnalysisRun→ AnalysisRun -AnalyzedFact→ VerifiedFact
+AnalysisRun -ProducedSummary→ VerifiedEncounterSummary
+AnalysisRun -ProducedInsight→ InsightItem -InsightSupportedBy→ VerifiedFact
+AnalysisRun -ProducedQuestion→ SuggestedQuestion -QuestionBasedOn→ VerifiedFact
+Encounter -HasFinalPacket→ FinalReviewPacket -ContainsAnalysis→ AnalysisRun
 ```
 
 Four endpoint-constrained representation edges distinguish medication, lab,
@@ -123,6 +145,17 @@ history but are marked non-current.
   fact, candidate, transcript chunk, encounter, and patient.
 - `ResetDemoWalker` removes only the selected synthetic session ownership
   boundary and recreates its deterministic topology.
+- `TranslateTranscriptChunkWalker` preserves original evidence and connects one
+  literal English/Spanish translation.
+- `LiveQuickSummaryWalker` creates only an explicitly unverified sourced draft.
+- `VerifiedEncounterAnalysisWalker` traverses accepted facts, obligations,
+  tasks, gaps, and conflicts and persists a versioned verified-only result.
+- `ClarifyingQuestionWalker` creates only gap/conflict-bound clinician
+  questions.
+- `FinalReviewPacketWalker` preserves separate verified, review-required, and
+  unverified sections.
+- `TraceAnalysisItemWalker` walks from analysis output to immutable transcript
+  or synthetic document evidence.
 
 Traversal traces are recorded at actual walker entry and edge-follow events
 only when `DEMO_TRACE_ENABLED=true`. They contain no prompts, hidden reasoning,
@@ -176,6 +209,23 @@ trace_output_to_source
 generate_patient_audio_script
 ```
 
+Additive live-translation and intelligence actions are:
+
+```text
+translate_transcript_chunk
+get_translated_transcript
+retry_translation
+generate_live_quick_summary
+get_live_quick_summary
+run_verified_encounter_analysis
+get_verified_encounter_analysis
+generate_clarifying_questions
+dismiss_suggested_question
+mark_question_answered
+generate_final_review_packet
+trace_analysis_item
+```
+
 All generated function actions use JSON request bodies except
 `ingest_document_image`, which uses Jac's native `multipart/form-data`
 `UploadFile` boundary. The exact `FormData` mapping is in
@@ -202,6 +252,9 @@ mock_malformed  deliberately malformed MockLLM with deterministic fallback
 live            configured provider, always guarded by fallback
 ```
 
+Set `PA_CO_INTELLIGENCE_MODE` to one of those values for translation and live
+summary actions. Its safe default is `disabled`.
+
 Extraction validates schema, allowed enums, session-local chunks, exact
 evidence, confidence, duplicates, fabricated details, prohibited medical
 behavior, and instruction-injection attempts. Translation preserves dates,
@@ -224,8 +277,10 @@ reimplement verification or graph rules in frontend code.
 
 Exact mappings and an integration sequence are in
 [FRONTEND_HANDOFF.md](FRONTEND_HANDOFF.md) and
-[MULTIMODAL_FRONTEND_HANDOFF.md](MULTIMODAL_FRONTEND_HANDOFF.md). Backend work
-does not edit
+[MULTIMODAL_FRONTEND_HANDOFF.md](MULTIMODAL_FRONTEND_HANDOFF.md), with the
+additive intelligence mapping in
+[INTELLIGENCE_FRONTEND_HANDOFF.md](INTELLIGENCE_FRONTEND_HANDOFF.md). Backend
+work does not edit
 `frontend.cl.jac`, `frontend.impl.jac`, `components/`, `styles/`, frontend mock
 data, or frontend tests.
 
@@ -245,6 +300,10 @@ data, or frontend tests.
 - Jac 0.34.7 returns some generated-endpoint argument errors inside an HTTP 200
   transport response; clients must inspect the outer envelope and nested
   `BackendResponse`.
+- On the generated `append_transcript_chunk` HTTP route, Jac 0.34.7 may
+  materialize an omitted `confidence` default as a string. HTTP clients should
+  send `"confidence": 1.0` explicitly; direct Jac calls and `JacTestClient`
+  calls preserve the typed default.
 - `jac start --faux` prints its endpoint report but then encounters a 0.34.7
   cleanup defect. It is not used as a release gate.
 - Conflict resolution is intentionally manual. Dates remain deterministic demo
@@ -256,6 +315,9 @@ Core code is in `main.jac`, `models.sv.jac`, `extraction.sv.jac`,
 `ai.sv.jac`, `walkers.sv.jac`, `patient_agent.sv.jac`, `endpoints.sv.jac`,
 `multimodal_data.sv.jac`, `multimodal_ai.sv.jac`,
 `multimodal_walkers.sv.jac`, `multimodal_endpoints.sv.jac`, and `jac.toml`.
+Intelligence code is isolated in `intelligence_models.sv.jac`,
+`intelligence_ai.sv.jac`, `intelligence_walkers.sv.jac`, and
+`intelligence_endpoints.sv.jac`.
 Verification lives in `tests/`; architecture, contract, demo,
 model, judge, and frontend handoff documents live at the repository root.
 

@@ -95,11 +95,46 @@ enum ExtractionMode: str {
     FALLBACK = "fallback"
 }
 
+enum TranslationStatus: str {
+    PENDING = "pending",
+    TRANSLATING = "translating",
+    TRANSLATED = "translated",
+    FALLBACK = "fallback",
+    FAILED = "failed"
+}
+
+enum AnalysisStatus: str {
+    CREATED = "created",
+    RUNNING = "running",
+    COMPLETED = "completed",
+    PARTIAL = "partial",
+    FAILED = "failed",
+    SUPERSEDED = "superseded"
+}
+
+enum AnalysisSourceScope: str {
+    UNVERIFIED_TRANSCRIPT = "unverified_transcript",
+    VERIFIED_GRAPH = "verified_graph",
+    APPROVED_PATIENT_PLAN = "approved_patient_plan"
+}
+
+enum QuestionPurpose: str {
+    CLARIFY_MISSING_INFORMATION = "clarify_missing_information",
+    RESOLVE_DOCUMENTATION_GAP = "resolve_documentation_gap",
+    CONFIRM_FOLLOW_UP = "confirm_follow_up",
+    CONFIRM_RESPONSIBILITY = "confirm_responsibility",
+    RESOLVE_CONTRADICTION = "resolve_contradiction"
+}
+
 sem InputSourceType = "A constrained capture adapter. Browser capture produces text or image input for deterministic graph ingestion.";
 sem CaptureSessionStatus = "The auditable state of a synthetic encounter capture. Completion never implies clinician verification.";
 sem SourceArtifactType = "A non-diagnostic source classification used only for synthetic continuity-of-care evidence.";
 sem NoteStatus = "The review state of a synthetic clinician-review draft; it is not an official EHR note.";
 sem ExtractionMode = "The actual extraction adapter. Model modes remain optional and can create pending proposals only.";
+sem TranslationStatus = "The processing state of a literal, non-authoritative translation of immutable transcript evidence.";
+sem AnalysisStatus = "The lifecycle of a derived analysis. Completed does not mean clinician approval and superseded output is not current.";
+sem AnalysisSourceScope = "The enforced evidence boundary used by one derived intelligence operation.";
+sem QuestionPurpose = "A documentation or care-coordination purpose grounded in a current gap or conflict; never a diagnostic purpose.";
 
 obj ExtractedCandidate {
     has category: str = "",
@@ -408,6 +443,135 @@ obj MultimodalProvenanceDTO {
         complete: bool = False;
 }
 
+obj TranslatedTranscriptChunkDTO {
+    has id: str = "",
+        original_chunk_id: str = "",
+        capture_session_id: str = "",
+        source_language: str = "",
+        target_language: str = "",
+        original_text: str = "",
+        translated_text: str = "",
+        speaker: str = "",
+        sequence: int = 0,
+        status: str = "",
+        translation_mode: str = "",
+        fallback_used: bool = False,
+        created_at: str = "";
+}
+
+obj LiveQuickSummaryDTO {
+    has id: str = "",
+        encounter_id: str = "",
+        status: str = "",
+        summary: str = "",
+        key_points: list[str] = [],
+        source_chunk_ids: list[str] = [],
+        unverified: bool = True,
+        model_mode: str = "deterministic",
+        fallback_used: bool = False,
+        generated_at: str = "";
+}
+
+obj VerifiedEncounterSummaryDTO {
+    has id: str = "",
+        encounter_id: str = "",
+        summary: str = "",
+        patient_concerns: list[str] = [],
+        medications: list[str] = [],
+        allergies: list[str] = [],
+        laboratory_orders: list[str] = [],
+        referrals: list[str] = [],
+        follow_ups: list[str] = [],
+        outstanding_tasks: list[str] = [],
+        contradictions: list[str] = [],
+        source_fact_ids: list[str] = [],
+        verified_only: bool = True,
+        generated_at: str = "";
+}
+
+obj InsightItemDTO {
+    has id: str = "",
+        insight_type: str = "",
+        title: str = "",
+        description: str = "",
+        severity: str = "review",
+        source_fact_ids: list[str] = [],
+        related_gap_ids: list[str] = [],
+        requires_clinician_review: bool = True;
+}
+
+obj SuggestedQuestionDTO {
+    has id: str = "",
+        question: str = "",
+        purpose: str = "",
+        explanation: str = "",
+        source_fact_ids: list[str] = [],
+        related_gap_ids: list[str] = [],
+        clinician_only: bool = True,
+        status: str = "open";
+}
+
+obj AnalysisRunDTO {
+    has id: str = "",
+        encounter_id: str = "",
+        status: str = "",
+        graph_version: int = 0,
+        accepted_fact_ids: list[str] = [],
+        rejected_fact_ids_excluded: list[str] = [],
+        summary: VerifiedEncounterSummaryDTO | None = None,
+        insights: list[InsightItemDTO] = [],
+        questions: list[SuggestedQuestionDTO] = [],
+        care_gaps: list[CareGapDTO] = [],
+        conflicts: list[ConflictDTO] = [],
+        source_fact_ids: list[str] = [],
+        model_mode: str = "deterministic",
+        fallback_used: bool = False,
+        created_at: str = "",
+        completed_at: str = "",
+        stale: bool = False,
+        superseding_run_id: str = "";
+}
+
+obj FinalReviewPacketDTO {
+    has id: str = "",
+        encounter_id: str = "",
+        verified_summary: VerifiedEncounterSummaryDTO | None = None,
+        clinician_note_id: str = "",
+        suggested_questions: list[SuggestedQuestionDTO] = [],
+        active_care_gaps: list[CareGapDTO] = [],
+        conflicts: list[ConflictDTO] = [],
+        patient_plan_id: str = "",
+        english_patient_plan: PatientPlanDTO | None = None,
+        spanish_patient_plan: PatientPlanDTO | None = None,
+        encounter_timeline: list[EncounterTimelineEventDTO] = [],
+        source_fact_ids: list[str] = [],
+        graph_version: int = 0,
+        generated_at: str = "",
+        verified_items: list[str] = [],
+        requires_review_items: list[str] = [],
+        unverified_items: list[str] = [];
+}
+
+obj AnalysisProvenanceDTO {
+    has analysis_run_id: str = "",
+        item_id: str = "",
+        item_type: str = "",
+        source_fact_ids: list[str] = [],
+        ordered_steps: list[TraversalStepDTO] = [],
+        source_excerpt: str = "",
+        source_type: str = "",
+        complete: bool = False;
+}
+
+sem TranslatedTranscriptChunkDTO = "A literal translation paired with immutable original transcript evidence. It has no verification authority.";
+sem LiveQuickSummaryDTO = "An explicitly unverified conversation draft that cannot enter a patient plan or approved note.";
+sem VerifiedEncounterSummaryDTO = "A derived organization of current-session clinician-accepted facts only. It cannot add clinical knowledge.";
+sem InsightItemDTO = "A documentation-completeness or contradiction item supported by accepted fact IDs and current graph gaps.";
+sem SuggestedQuestionDTO = "A clinician-only documentation question grounded in a current gap or conflict.";
+sem AnalysisRunDTO = "A versioned derived analysis whose currentness is checked against the evidence graph version.";
+sem FinalReviewPacketDTO = "A review packet that keeps verified, requires-review, and unverified material in separate fields.";
+sem AnalysisProvenanceDTO = "A backward evidence walk from one analysis item to immutable transcript or synthetic document evidence.";
+
 obj CareGraphDTO {
     has patient: PatientDTO | None = None,
         encounter: EncounterDTO | None = None,
@@ -459,6 +623,14 @@ obj BackendResponse {
         timeline: list[EncounterTimelineEventDTO] = [],
         patient_audio_script: PatientAudioScriptDTO | None = None,
         multimodal_provenance: list[MultimodalProvenanceDTO] = [],
+        translated_chunk: TranslatedTranscriptChunkDTO | None = None,
+        translated_transcript: list[TranslatedTranscriptChunkDTO] = [],
+        live_quick_summary: LiveQuickSummaryDTO | None = None,
+        verified_encounter_summary: VerifiedEncounterSummaryDTO | None = None,
+        analysis_run: AnalysisRunDTO | None = None,
+        suggested_questions: list[SuggestedQuestionDTO] = [],
+        final_review_packet: FinalReviewPacketDTO | None = None,
+        analysis_provenance: list[AnalysisProvenanceDTO] = [],
         created_graph_ids: list[str] = [],
         traversal_trace: list[TraversalStepDTO] = [],
         provenance_chains: list[ProvenanceChainDTO] = [];

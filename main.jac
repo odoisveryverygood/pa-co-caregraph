@@ -24,6 +24,14 @@ import from models {
     EncounterTimelineEventDTO,
     PatientAudioScriptDTO,
     MultimodalProvenanceDTO,
+    TranslatedTranscriptChunkDTO,
+    LiveQuickSummaryDTO,
+    VerifiedEncounterSummaryDTO,
+    InsightItemDTO,
+    SuggestedQuestionDTO,
+    AnalysisRunDTO,
+    FinalReviewPacketDTO,
+    AnalysisProvenanceDTO,
 }
 import from endpoints {
     load_demo_encounter,
@@ -57,4 +65,18 @@ import from multimodal_endpoints {
     get_encounter_timeline,
     trace_output_to_source,
     generate_patient_audio_script,
+}
+import from intelligence_endpoints {
+    translate_transcript_chunk,
+    get_translated_transcript,
+    retry_translation,
+    generate_live_quick_summary,
+    get_live_quick_summary,
+    run_verified_encounter_analysis,
+    get_verified_encounter_analysis,
+    generate_clarifying_questions,
+    dismiss_suggested_question,
+    mark_question_answered,
+    generate_final_review_packet,
+    trace_analysis_item,
 }

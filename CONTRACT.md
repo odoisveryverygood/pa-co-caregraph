@@ -1382,3 +1382,666 @@ synthesis is unavailable. Errors: `PATIENT_PLAN_NOT_FOUND`,
 ```json
 {"success":false,"error_code":"PATIENT_PLAN_NOT_FOUND","recoverable":true}
 ```
+
+## Live translation and verified encounter intelligence
+
+This section is additive. Every action and field above remains supported.
+Intelligence actions use the same nested `BackendResponse` and generated Jac
+HTTP envelope documented earlier. A generated `/function/*` response is an
+outer JSON array containing the nested response object; direct Jac calls
+return the nested `BackendResponse`.
+
+The reliable default is deterministic and keyless. Optional modes are selected
+by the server's configured intelligence adapter, never by transcript content.
+`model_mode` reports the adapter that actually produced an output.
+`fallback_used=true` means the requested adapter failed validation or was
+unavailable and deterministic Jac behavior produced the response.
+
+### Enums
+
+```text
+TranslationStatus = pending | translating | translated | fallback | failed
+AnalysisStatus = created | running | completed | partial | failed | superseded
+AnalysisSourceScope =
+  unverified_transcript | verified_graph | approved_patient_plan
+QuestionPurpose =
+  clarify_missing_information | resolve_documentation_gap |
+  confirm_follow_up | confirm_responsibility | resolve_contradiction
+```
+
+These are internal string-backed enums and serialize exactly as the lowercase
+values above.
+
+### Additive response fields
+
+`BackendResponse` adds:
+
+```text
+translated_chunk: TranslatedTranscriptChunkDTO | None
+translated_transcript: list[TranslatedTranscriptChunkDTO]
+live_quick_summary: LiveQuickSummaryDTO | None
+verified_encounter_summary: VerifiedEncounterSummaryDTO | None
+analysis_run: AnalysisRunDTO | None
+suggested_questions: list[SuggestedQuestionDTO]
+final_review_packet: FinalReviewPacketDTO | None
+analysis_provenance: list[AnalysisProvenanceDTO]
+```
+
+All existing fields remain unchanged. A failure continues to include
+`success=false`, `error_code`, `message`, `recoverable`, and
+`current_graph_version`. Model-backed failures also return a non-sensitive
+`ai_status`; they never expose a key, prompt, raw media, or hidden reasoning.
+
+### Intelligence DTOs
+
+`TranslatedTranscriptChunkDTO`
+
+```text
+id: str
+original_chunk_id: str
+capture_session_id: str
+source_language: str
+target_language: str
+original_text: str
+translated_text: str
+speaker: str
+sequence: int
+status: str
+translation_mode: str
+fallback_used: bool
+created_at: str
+```
+
+`LiveQuickSummaryDTO`
+
+```text
+id: str
+encounter_id: str
+status: str
+summary: str
+key_points: list[str]
+source_chunk_ids: list[str]
+unverified: bool
+model_mode: str
+fallback_used: bool
+generated_at: str
+```
+
+The required UI label is `AI conversation draft — not yet clinician
+verified.`
+
+`VerifiedEncounterSummaryDTO`
+
+```text
+id: str
+encounter_id: str
+summary: str
+patient_concerns: list[str]
+medications: list[str]
+allergies: list[str]
+laboratory_orders: list[str]
+referrals: list[str]
+follow_ups: list[str]
+outstanding_tasks: list[str]
+contradictions: list[str]
+source_fact_ids: list[str]
+verified_only: bool
+generated_at: str
+```
+
+`InsightItemDTO`
+
+```text
+id: str
+insight_type: str
+title: str
+description: str
+severity: str
+source_fact_ids: list[str]
+related_gap_ids: list[str]
+requires_clinician_review: bool
+```
+
+`SuggestedQuestionDTO`
+
+```text
+id: str
+question: str
+purpose: str
+explanation: str
+source_fact_ids: list[str]
+related_gap_ids: list[str]
+clinician_only: bool
+status: str
+```
+
+`AnalysisRunDTO`
+
+```text
+id: str
+encounter_id: str
+status: str
+graph_version: int
+accepted_fact_ids: list[str]
+rejected_fact_ids_excluded: list[str]
+summary: VerifiedEncounterSummaryDTO | None
+insights: list[InsightItemDTO]
+questions: list[SuggestedQuestionDTO]
+care_gaps: list[CareGapDTO]
+conflicts: list[ConflictDTO]
+source_fact_ids: list[str]
+model_mode: str
+fallback_used: bool
+created_at: str
+completed_at: str
+stale: bool
+superseding_run_id: str
+```
+
+`FinalReviewPacketDTO`
+
+```text
+id: str
+encounter_id: str
+verified_summary: VerifiedEncounterSummaryDTO | None
+clinician_note_id: str
+suggested_questions: list[SuggestedQuestionDTO]
+active_care_gaps: list[CareGapDTO]
+conflicts: list[ConflictDTO]
+patient_plan_id: str
+english_patient_plan: PatientPlanDTO | None
+spanish_patient_plan: PatientPlanDTO | None
+encounter_timeline: list[EncounterTimelineEventDTO]
+source_fact_ids: list[str]
+graph_version: int
+generated_at: str
+verified_items: list[str]
+requires_review_items: list[str]
+unverified_items: list[str]
+```
+
+`AnalysisProvenanceDTO`
+
+```text
+analysis_run_id: str
+item_id: str
+item_type: str
+source_fact_ids: list[str]
+ordered_steps: list[TraversalStepDTO]
+source_excerpt: str
+source_type: str
+complete: bool
+```
+
+### `translate_transcript_chunk`
+
+```text
+translate_transcript_chunk(
+  transcript_chunk_id: str,
+  target_language: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `TranslateTranscriptChunkWalker` from the selected synthetic session.
+The source chunk must be finalized and belong to that session. The walker
+preserves the original text, speaker, sequence, dates, numbers, names,
+negation, and uncertainty. It creates at most one current translation per
+source/target pair. Translation cannot create a candidate or verified fact.
+
+- Success: `translated_chunk`
+- Loading status: a persisted translation may move from `pending` to
+  `translating` to `translated`; the synchronous public response is terminal
+- Model mode: configured adapter, deterministic prepared map, pass-through, or
+  fallback
+- Graph mutation: yes on first creation or status transition
+- Graph version: increments only when translation state changes
+- Errors: `SESSION_NOT_FOUND`, `TRANSCRIPT_CHUNK_NOT_FOUND`,
+  `TRANSCRIPT_CHUNK_NOT_FINALIZED`, `UNSUPPORTED_LANGUAGE`,
+  `TRANSLATION_VALIDATION_FAILED`
+
+Request:
+
+```json
+{"transcript_chunk_id":"chunk-live-es-1","target_language":"English","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"current_graph_version":4,"translated_chunk":{"id":"translation-demo-default-chunk-live-es-1-English","original_chunk_id":"chunk-live-es-1","source_language":"Spanish","target_language":"English","original_text":"Me he sentido mareada durante tres días.","translated_text":"I have felt dizzy for three days.","speaker":"Patient","sequence":1,"status":"translated","translation_mode":"deterministic","fallback_used":false}}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"TRANSCRIPT_CHUNK_NOT_FOUND","message":"The finalized transcript chunk was not found in this session.","recoverable":true,"current_graph_version":3}
+```
+
+### `get_translated_transcript`
+
+```text
+get_translated_transcript(
+  capture_session_id: str,
+  target_language: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `GetTranslatedTranscriptWalker`, traverses only the named capture, and
+returns `translated_transcript` in source sequence order. It never
+auto-translates missing rows.
+
+- Graph mutation/version: none
+- Model/fallback: reports persisted row values only
+- Errors: `CAPTURE_NOT_FOUND`, `UNSUPPORTED_LANGUAGE`
+
+Request:
+
+```json
+{"capture_session_id":"capture-demo-default-2","target_language":"English","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"translated_transcript":[{"original_chunk_id":"chunk-live-es-1","sequence":1,"status":"translated"}]}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"CAPTURE_NOT_FOUND","message":"The capture was not found in this session.","recoverable":true}
+```
+
+### `retry_translation`
+
+```text
+retry_translation(
+  translated_chunk_id: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `RetryTranslationWalker`. Only a current `fallback` or `failed`
+translation in the selected session is eligible. The original transcript is
+immutable.
+
+- Graph mutation: yes when a retry status/result changes
+- Graph version: increments on change; successful idempotent replay does not
+- Model/fallback: configured adapter with deterministic fallback
+- Errors: `TRANSLATION_NOT_FOUND`, `TRANSLATION_NOT_RETRYABLE`
+
+Request:
+
+```json
+{"translated_chunk_id":"translation-demo-default-chunk-live-es-1-English","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"translated_chunk":{"status":"translated","fallback_used":false}}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"TRANSLATION_NOT_RETRYABLE","message":"Only failed or fallback translations can be retried.","recoverable":false}
+```
+
+### `generate_live_quick_summary`
+
+```text
+generate_live_quick_summary(
+  encounter_id: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `LiveQuickSummaryWalker`, reads finalized encounter transcript chunks,
+and stores a superseding unverified draft. It can summarize only speaker-aware
+source text and must retain all supporting chunk IDs. It cannot create a
+candidate, verification, note approval, or patient brief.
+
+- Success: `live_quick_summary` with `unverified=true`
+- Graph mutation/version: yes for a new or changed draft
+- Model/fallback: optional validated model; deterministic extractive fallback
+- Errors: `ENCOUNTER_NOT_FOUND`, `NO_FINALIZED_TRANSCRIPT`,
+  `QUICK_SUMMARY_UNSUPPORTED_CLAIM`
+
+Request:
+
+```json
+{"encounter_id":"encounter-maya-001","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"live_quick_summary":{"id":"quick-summary-demo-default-5","status":"completed","summary":"Patient: I have felt dizzy for three days. Doctor: A blood test will be ordered this week.","key_points":["I have felt dizzy for three days.","A blood test will be ordered this week."],"source_chunk_ids":["chunk-live-es-1","chunk-live-en-2"],"unverified":true,"model_mode":"deterministic","fallback_used":false}}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"NO_FINALIZED_TRANSCRIPT","message":"No finalized transcript is available for an unverified quick summary.","recoverable":true}
+```
+
+### `get_live_quick_summary`
+
+```text
+get_live_quick_summary(
+  encounter_id: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `GetLiveQuickSummaryWalker` and returns the current unverified draft.
+
+- Graph mutation/version: none
+- Model/fallback: persisted values only
+- Errors: `ENCOUNTER_NOT_FOUND`, `QUICK_SUMMARY_NOT_FOUND`
+
+Request:
+
+```json
+{"encounter_id":"encounter-maya-001","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"live_quick_summary":{"unverified":true,"source_chunk_ids":["chunk-live-es-1","chunk-live-en-2"]}}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"QUICK_SUMMARY_NOT_FOUND","message":"No live quick summary exists for this encounter.","recoverable":true}
+```
+
+### `run_verified_encounter_analysis`
+
+```text
+run_verified_encounter_analysis(
+  encounter_id: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `VerifiedEncounterAnalysisWalker`. Deterministic Jac selects accepted
+`VerifiedFact` paths, specialized obligations, tasks, active gaps, conflicts,
+and supporting evidence. Pending and rejected candidates, other sessions,
+quick-summary claims, and unresolved conflicting patient-facing conclusions
+are excluded before optional model organization.
+
+- Success: `analysis_run`, `verified_encounter_summary`, `care_gaps`,
+  `conflicts`
+- Graph mutation/version: analysis nodes are persisted; domain graph version
+  remains the evidence version used by the run
+- Model/fallback: optional organization of the allowed facts; deterministic
+  structured fallback
+- Errors: `ENCOUNTER_NOT_FOUND`, `NO_VERIFIED_FACTS`,
+  `ANALYSIS_VALIDATION_FAILED`
+
+Request:
+
+```json
+{"encounter_id":"encounter-maya-001","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"current_graph_version":9,"analysis_run":{"id":"analysis-demo-default-9-1","status":"completed","graph_version":9,"accepted_fact_ids":["verified-candidate-lab"],"rejected_fact_ids_excluded":["candidate-language"],"source_fact_ids":["verified-candidate-lab"],"model_mode":"deterministic","fallback_used":false,"stale":false},"verified_encounter_summary":{"verified_only":true,"laboratory_orders":["blood test; due this week"],"source_fact_ids":["verified-candidate-lab"]}}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"NO_VERIFIED_FACTS","message":"No accepted facts are available for verified analysis.","recoverable":true,"current_graph_version":2}
+```
+
+### `get_verified_encounter_analysis`
+
+```text
+get_verified_encounter_analysis(
+  analysis_run_id: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `GetVerifiedEncounterAnalysisWalker`. It returns the scoped run and
+computes `stale=true` when its evidence version differs from the session graph
+version or it has a superseding run. A stale response must display `New
+verified information is available. Re-run analysis.`
+
+- Graph mutation/version: none
+- Model/fallback: persisted values only
+- Errors: `ANALYSIS_NOT_FOUND`
+
+Request:
+
+```json
+{"analysis_run_id":"analysis-demo-default-9-1","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"analysis_run":{"id":"analysis-demo-default-9-1","status":"superseded","stale":true,"superseding_run_id":"analysis-demo-default-10-2"}}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"ANALYSIS_NOT_FOUND","message":"The analysis run was not found in this session.","recoverable":true}
+```
+
+### `generate_clarifying_questions`
+
+```text
+generate_clarifying_questions(
+  encounter_id: str,
+  analysis_run_id: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `ClarifyingQuestionWalker`. Each generated question must connect to a
+current accepted fact and a current `CareGap` or `Conflict`. Questions are
+administrative/documentation prompts only and are always clinician-only.
+
+- Success: `suggested_questions` and updated `analysis_run.questions`
+- Graph mutation/version: persists idempotent question nodes; does not change
+  the evidence graph version
+- Model/fallback: optional wording from allowed graph material; deterministic
+  templates otherwise
+- Errors: `ENCOUNTER_NOT_FOUND`, `ANALYSIS_NOT_FOUND`,
+  `ANALYSIS_STALE`, `QUESTION_VALIDATION_FAILED`
+
+Request:
+
+```json
+{"encounter_id":"encounter-maya-001","analysis_run_id":"analysis-demo-default-9-1","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"suggested_questions":[{"id":"question-gap-lab-owner-verified-candidate-lab","question":"Who is responsible for coordinating the blood test?","purpose":"confirm_responsibility","source_fact_ids":["verified-candidate-lab"],"related_gap_ids":["gap-lab-owner-verified-candidate-lab"],"clinician_only":true,"status":"open"}]}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"ANALYSIS_STALE","message":"New verified information is available. Re-run analysis.","recoverable":true}
+```
+
+### `dismiss_suggested_question`
+
+```text
+dismiss_suggested_question(
+  question_id: str,
+  clinician_id: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `DismissSuggestedQuestionWalker` and records the clinician-controlled
+status transition. It does not alter evidence, gaps, or conflicts.
+
+- Graph mutation: yes; the persisted clinician-review status changes
+- Graph version: unchanged because accepted evidence, gaps, conflicts, and
+  patient-visible outputs do not change
+- Model/fallback: none
+- Errors: `QUESTION_NOT_FOUND`, `CLINICIAN_ID_REQUIRED`,
+  `QUESTION_ALREADY_ANSWERED`
+
+Request:
+
+```json
+{"question_id":"question-gap-lab-owner-verified-candidate-lab","clinician_id":"demo-clinician","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"suggested_questions":[{"id":"question-gap-lab-owner-verified-candidate-lab","status":"dismissed"}]}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"QUESTION_NOT_FOUND","message":"The suggested question was not found in this session.","recoverable":true}
+```
+
+### `mark_question_answered`
+
+```text
+mark_question_answered(
+  question_id: str,
+  answer_source_fact_id: str,
+  clinician_id: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `MarkSuggestedQuestionAnsweredWalker`. The answer source must already be
+a current-session `VerifiedFact`; this action never creates or promotes one.
+
+- Graph mutation: yes; the question gains clinician-review state and a
+  `QuestionAnsweredBy` edge to an already accepted fact
+- Graph version: unchanged because no accepted evidence is created or modified
+- Model/fallback: none
+- Errors: `QUESTION_NOT_FOUND`, `VERIFIED_FACT_NOT_FOUND`,
+  `CLINICIAN_ID_REQUIRED`, `QUESTION_SUPPORT_INVALID`
+
+Request:
+
+```json
+{"question_id":"question-gap-lab-owner-verified-candidate-lab","answer_source_fact_id":"verified-candidate-lab-owner","clinician_id":"demo-clinician","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"suggested_questions":[{"id":"question-gap-lab-owner-verified-candidate-lab","status":"answered","source_fact_ids":["verified-candidate-lab","verified-candidate-lab-owner"]}]}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"VERIFIED_FACT_NOT_FOUND","message":"The answer source is not an accepted fact in this session.","recoverable":true}
+```
+
+### `generate_final_review_packet`
+
+```text
+generate_final_review_packet(
+  encounter_id: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `FinalReviewPacketWalker`. It combines the latest current analysis,
+review-ready/approved clinician note, active gaps, resolved tasks, suggested
+questions, conflicts, current English and Spanish patient plans, timeline,
+provenance identifiers, and graph version. It preserves separate
+`verified_items`, `requires_review_items`, and `unverified_items`.
+
+- Graph mutation/version: persists a versioned packet; the evidence graph
+  version does not change
+- Model/fallback: no new clinical generation; uses current validated outputs
+- Errors: `ENCOUNTER_NOT_FOUND`, `CURRENT_ANALYSIS_NOT_FOUND`,
+  `ANALYSIS_STALE`, `PATIENT_PLAN_NOT_FOUND`
+
+Request:
+
+```json
+{"encounter_id":"encounter-maya-001","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"final_review_packet":{"id":"final-packet-demo-default-14","graph_version":14,"verified_items":["Verified encounter summary","Approved English patient plan"],"requires_review_items":["2 active care gaps"],"unverified_items":["AI conversation draft — not yet clinician verified."]}}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"ANALYSIS_STALE","message":"New verified information is available. Re-run analysis.","recoverable":true}
+```
+
+### `trace_analysis_item`
+
+```text
+trace_analysis_item(
+  analysis_run_id: str,
+  item_id: str,
+  session_id: str = "demo-default"
+) -> BackendResponse
+```
+
+Spawns `TraceAnalysisItemWalker`. It walks from a summary, insight, or
+suggested-question item through accepted facts to immutable transcript or
+document evidence. It returns one `analysis_provenance` chain per support
+fact.
+
+- Graph mutation/version: none
+- Model/fallback: none
+- Errors: `ANALYSIS_NOT_FOUND`, `ANALYSIS_ITEM_NOT_FOUND`,
+  `PROVENANCE_INCOMPLETE`
+
+Request:
+
+```json
+{"analysis_run_id":"analysis-demo-default-14-2","item_id":"insight-gap-lab-owner","session_id":"demo-default"}
+```
+
+Success:
+
+```json
+{"success":true,"analysis_provenance":[{"analysis_run_id":"analysis-demo-default-14-2","item_id":"insight-gap-lab-owner","source_fact_ids":["verified-candidate-lab"],"source_type":"transcript","source_excerpt":"We will order a blood test to be completed this week.","complete":true}]}
+```
+
+Failure:
+
+```json
+{"success":false,"error_code":"PROVENANCE_INCOMPLETE","message":"The analysis item does not have a complete current-session evidence chain.","recoverable":false}
+```
+
+## Intelligence state and invalidation
+
+An analysis becomes stale after a candidate decision, gap resolution,
+contradiction insertion, note approval, new transcript chunk, or acceptance of
+a document-derived fact. Old analysis, summaries, questions, and final packets
+remain as audit history but are not presented as current. A rerun records
+`superseding_run_id` on the prior analysis.
+
+Translations and quick summaries belong to the unverified transcript scope.
+Verified encounter summaries belong to `verified_graph`. Patient-plan
+translation belongs to `approved_patient_plan`. No action may silently move
+content between these scopes.

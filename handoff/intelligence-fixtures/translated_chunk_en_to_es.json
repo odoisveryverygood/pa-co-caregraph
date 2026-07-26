@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "error_code": "",
+  "message": "Transcript chunk translated.",
+  "recoverable": false,
+  "current_graph_version": 6,
+  "translated_chunk": {
+    "id": "translation-demo-default-chunk-live-en-2-spanish-6",
+    "original_chunk_id": "chunk-live-en-2",
+    "capture_session_id": "capture-demo-default-2",
+    "source_language": "English",
+    "target_language": "Spanish",
+    "original_text": "We will order a blood test to be completed this week.",
+    "translated_text": "Pediremos un análisis de sangre para completar esta semana.",
+    "speaker": "Doctor",
+    "sequence": 2,
+    "status": "translated",
+    "translation_mode": "deterministic",
+    "fallback_used": false,
+    "created_at": "2026-07-26T18:00:06Z"
+  }
+}

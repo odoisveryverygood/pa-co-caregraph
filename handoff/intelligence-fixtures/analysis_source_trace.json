@@ -1,0 +1,42 @@
+{
+  "success": true,
+  "error_code": "",
+  "message": "Analysis item provenance traced.",
+  "recoverable": false,
+  "current_graph_version": 20,
+  "analysis_provenance": [
+    {
+      "analysis_run_id": "analysis-demo-default-20-2",
+      "item_id": "verified-summary-analysis-demo-default-20-2",
+      "item_type": "verified_summary",
+      "source_fact_ids": [
+        "verified-candidate-lab"
+      ],
+      "ordered_steps": [
+        {
+          "order": 1,
+          "walker_name": "MultimodalTraceProvenanceWalker",
+          "current_node_id": "verified-candidate-lab",
+          "current_node_type": "VerifiedFact",
+          "edge_type": "VerifiedFrom",
+          "action": "follow verification source",
+          "outcome": "candidate-lab",
+          "human_explanation": "Reached the clinician-approved fact's pending proposal."
+        },
+        {
+          "order": 2,
+          "walker_name": "MultimodalTraceProvenanceWalker",
+          "current_node_id": "candidate-lab",
+          "current_node_type": "CandidateFact",
+          "edge_type": "ExtractedFrom",
+          "action": "follow transcript evidence",
+          "outcome": "chunk-1",
+          "human_explanation": "Reached the exact speaker-labeled transcript chunk."
+        }
+      ],
+      "source_excerpt": "We will order a blood test to be completed this week.",
+      "source_type": "transcript",
+      "complete": true
+    }
+  ]
+}
