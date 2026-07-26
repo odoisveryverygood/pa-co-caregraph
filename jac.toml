@@ -1,0 +1,19 @@
+[project]
+name = "pa-co-caregraph"
+version = "0.1.0"
+description = "A Jac-native verified continuity-of-care graph for synthetic clinician-approved follow-up plans."
+entry-point = "main.jac"
+kind = "service"
+jac-version = "0.34.7"
+
+[serve]
+port = 8000
+
+[check.lint]
+select = ["default"]
+
+[test]
+directory = "tests"
+verbose = true
+fail_fast = false
+max_failures = 1
