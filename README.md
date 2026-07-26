@@ -14,7 +14,10 @@ records audited resolutions, builds an approved-only patient brief, answers
 questions from graph evidence, and preserves contradictory statements for
 review.
 
-No model API or credential is required. The backend does not diagnose,
+No model API or credential is required for the reliable demo. Optional typed
+AI can propose unverified candidates, translate or simplify an approved brief,
+and match questions to an allow-list of verified fact IDs. Every optional path
+is validated and falls back deterministically. The backend does not diagnose,
 recommend medication, change dosage, determine treatment safety, perform
 emergency triage, or invent missing facts.
 
@@ -54,6 +57,16 @@ Run the full P0 acceptance flow three consecutive times:
 ```bash
 jac clean --data --force
 jac run tests/p0_demo.jac
+```
+
+Run the complete flow with AI enabled through Jac `MockLLM`, AI disabled,
+missing live credentials, and mock output:
+
+```bash
+jac clean --data --force
+env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY -u GOOGLE_API_KEY \
+  -u PA_CO_AI_API_KEY -u BYLLM_DEFAULT_MODEL \
+  PA_CO_AI_MODEL=gpt-4o-mini jac run tests/ai_modes_demo.jac
 ```
 
 The acceptance script resets each synthetic session, verifies four facts,
@@ -118,14 +131,15 @@ inside `VerificationWalker`.
 The frontend-callable Jac functions are:
 
 ```text
-load_demo_encounter(session_id="demo-default")
+load_demo_encounter(session_id="demo-default", ai_mode="disabled")
 get_candidate_facts(session_id="demo-default")
 verify_fact(fact_id, decision, clinician_id, session_id="demo-default")
 get_care_graph(session_id="demo-default")
 run_care_gap_check(session_id="demo-default")
 resolve_gap(gap_id, resolution, owner, due_date, session_id="demo-default")
-generate_patient_plan(language, session_id="demo-default")
-ask_patient_question(question, session_id="demo-default")
+generate_patient_plan(language, session_id="demo-default", ai_mode="disabled")
+simplify_patient_plan(session_id="demo-default", ai_mode="live")
+ask_patient_question(question, session_id="demo-default", ai_mode="disabled")
 run_evidence_audit(session_id="demo-default")
 reset_demo(session_id="demo-default")
 add_demo_contradiction(session_id="demo-default")
@@ -147,6 +161,7 @@ sv import from endpoints {
     run_care_gap_check,
     resolve_gap,
     generate_patient_plan,
+    simplify_patient_plan,
     ask_patient_question,
     run_evidence_audit,
     reset_demo,
@@ -174,20 +189,54 @@ candidate promotion in frontend code.
 ## Deterministic fallback and optional AI seam
 
 `extraction.sv.jac` contains the five prepared facts and the later
-contradiction. P0 never imports `by llm`, reads an API key, or calls a model.
+contradiction. The default P0 path never calls a model. `ai.sv.jac` contains
+Jac 0.34.7-compatible typed `by llm()` functions and deterministic
+`MockLLM` providers.
 
-Optional AI may later be added behind a typed candidate-extraction function in
-`extraction.sv.jac`. Its output must remain unverified `CandidateFact` input to
-`VerificationWalker`; no model pathway may create or modify `VerifiedFact`,
-specialized care records, patient briefs, or gap resolutions.
+Live AI is opt-in:
+
+```bash
+export PA_CO_AI_MODEL="gpt-4o-mini"
+export OPENAI_API_KEY="<provider key>"
+```
+
+`PA_CO_AI_API_KEY` is also supported by `jac.toml`. For another provider, set
+the model plus its standard variable (`ANTHROPIC_API_KEY` or
+`GOOGLE_API_KEY`). `BYLLM_DEFAULT_MODEL` overrides the configured model.
+Ollama and installed Jac local models do not require a key.
+
+The checked-in settings use temperature `0.0`, at most one typed-output
+correction retry, a 1200-token output cap, and an eight-second request timeout.
+Never place a key in `jac.toml`, source, tests, or `.env.example`.
+
+AI extraction receives only synthetic chunk IDs, speakers, and transcript
+text. Results are checked for required fields, category allow-list, source
+existence, verbatim evidence, confidence range, prohibited medical behavior,
+and duplicates. Deterministic code can then store them only as pending
+`CandidateFact` nodes. `VerificationWalker` remains the sole promotion path.
+
+Translation and simplification operate only on an approved English
+`PatientBrief`; dates, numbers, structure, and source IDs are validated.
+Question AI returns verified IDs only. Deterministic code retrieves those
+nodes and composes the answer.
+
+Fallback behavior:
+
+- extraction failure loads the five prepared pending candidates;
+- translation/simplification failure returns approved English unchanged;
+- provider failure during question matching uses deterministic graph matching;
+- an unknown or unverified returned ID is denied and uses the exact safe
+  fallback;
+- credentials, provider exceptions, timeout, malformed/empty output, and
+  validation failures never crash the demo.
 
 ## Known limitations
 
 - Only the prepared synthetic Maya Rivera encounter is implemented.
 - The backend has no production identity, authorization, or real-patient-data
   ingestion; it must not be used with protected health information.
-- English and fixed deterministic Spanish checklist wording are available;
-  there is no general translation engine.
+- English and Spanish are supported; deterministic Spanish remains available
+  with AI disabled, and validated AI translation is optional.
 - Conflict resolution is intentionally manual and not part of P0.
 - Due dates are P0 strings rather than timezone-aware clinical scheduling
   objects.
@@ -209,11 +258,14 @@ specialized care records, patient briefs, or gap resolutions.
 - `jac.toml`
 - `models.sv.jac`
 - `extraction.sv.jac`
+- `ai.sv.jac`
 - `walkers.sv.jac`
 - `patient_agent.sv.jac`
 - `endpoints.sv.jac`
 - `tests/backend_tests.jac`
 - `tests/p0_demo.jac`
+- `tests/ai_tests.jac`
+- `tests/ai_modes_demo.jac`
 - `CONTRACT.md`
 - backend sections of `README.md`
 

@@ -1,13 +1,18 @@
 """Stable Jac-native public actions consumed by the Pa-Co frontend."""
 
 import from models {
+    AIStatusDTO,
     BackendResponse,
     CandidateFact,
     DemoSession,
+    PatientPlanDTO,
     VerifiedFact,
+    VerifiedFactReference,
     SessionOwns,
 }
 import from walkers {
+    AIConsultationIngestWalker,
+    CandidateProposalWalker,
     ConsultationIngestWalker,
     VerificationWalker,
     CareGapWalker,
@@ -17,10 +22,19 @@ import from walkers {
     ResetDemoWalker,
     failure_response,
     find_session,
+    fact_is_conflicted,
     build_demo_state,
     build_care_graph,
 }
 import from patient_agent { PatientQuestionWalker }
+import from ai {
+    BriefEnhancementAttempt,
+    CandidateExtractionAttempt,
+    QuestionMatchAttempt,
+    run_brief_enhancement,
+    run_candidate_extraction,
+    run_question_match,
+}
 
 def first_response(reports: list[BackendResponse], operation: str) -> BackendResponse {
     if reports {
@@ -34,9 +48,57 @@ def first_response(reports: list[BackendResponse], operation: str) -> BackendRes
     );
 }
 
-def:pub load_demo_encounter(session_id: str = "demo-default") -> BackendResponse {
-    result = root spawn ConsultationIngestWalker(session_id=session_id);
-    return first_response(result.reports, "load_demo_encounter");
+def valid_ai_mode(mode: str) -> bool {
+    return mode.lower().strip() in ["disabled", "live", "mock"];
+}
+
+def mark_recoverable_ai_fallback(
+    response: BackendResponse, status: AIStatusDTO | None
+) {
+    response.ai_status = status;
+    if status is not None and status.fallback_used {
+        response.recoverable = True;
+        response.error_code = status.diagnostic_code;
+    }
+}
+
+def:pub load_demo_encounter(
+    session_id: str = "demo-default", ai_mode: str = "disabled"
+) -> BackendResponse {
+    if not valid_ai_mode(ai_mode) {
+        return failure_response(
+            "AI_MODE_INVALID", "ai_mode must be 'disabled', 'live', or 'mock'.", True, 0
+        );
+    }
+    if ai_mode.lower().strip() == "disabled" {
+        result = root spawn ConsultationIngestWalker(session_id=session_id);
+        return first_response(result.reports, "load_demo_encounter");
+    }
+
+    transcript_result = root spawn AIConsultationIngestWalker(session_id=session_id);
+    transcript_response: BackendResponse = first_response(
+        transcript_result.reports, "load_demo_encounter.transcript"
+    );
+    if not transcript_response.success or transcript_response.demo_state is None {
+        return transcript_response;
+    }
+    extraction: CandidateExtractionAttempt = run_candidate_extraction(
+        transcript_response.demo_state.transcript, ai_mode
+    );
+    proposal_result = root spawn CandidateProposalWalker(
+        session_id=session_id, proposals=extraction.candidates
+    );
+    response: BackendResponse = first_response(
+        proposal_result.reports, "load_demo_encounter.proposals"
+    );
+    mark_recoverable_ai_fallback(response, extraction.ai_status);
+    if extraction.ai_status is not None and extraction.ai_status.fallback_used {
+        response.message = (
+            "Optional AI extraction was unavailable or invalid; the prepared "
+            "deterministic candidates were loaded safely."
+        );
+    }
+    return response;
 }
 
 def:pub get_candidate_facts(session_id: str = "demo-default") -> BackendResponse {
@@ -111,17 +173,135 @@ def:pub resolve_gap(
 }
 
 def:pub generate_patient_plan(
-    language: str, session_id: str = "demo-default"
+    language: str, session_id: str = "demo-default", ai_mode: str = "disabled"
 ) -> BackendResponse {
-    result = root spawn PatientPlanWalker(session_id=session_id, language=language);
-    return first_response(result.reports, "generate_patient_plan");
+    if not valid_ai_mode(ai_mode) {
+        return failure_response(
+            "AI_MODE_INVALID", "ai_mode must be 'disabled', 'live', or 'mock'.", True, 0
+        );
+    }
+    if ai_mode.lower().strip() == "disabled" {
+        result = root spawn PatientPlanWalker(session_id=session_id, language=language);
+        return first_response(result.reports, "generate_patient_plan");
+    }
+
+    english_result = root spawn PatientPlanWalker(
+        session_id=session_id, language="English"
+    );
+    response: BackendResponse = first_response(
+        english_result.reports, "generate_patient_plan.english"
+    );
+    if not response.success or response.patient_plan is None {
+        return response;
+    }
+    if language.lower() == "english" {
+        response.message = (
+            "Approved English patient brief generated; no translation was needed."
+        );
+        return response;
+    }
+    if language.lower() != "spanish" {
+        return failure_response(
+            "UNSUPPORTED_LANGUAGE",
+            "P0 supports English and Spanish only.",
+            True,
+            response.current_graph_version
+        );
+    }
+    enhancement: BriefEnhancementAttempt = run_brief_enhancement(
+        response.patient_plan as PatientPlanDTO, ai_mode, "translate"
+    );
+    response.patient_plan = enhancement.plan;
+    mark_recoverable_ai_fallback(response, enhancement.ai_status);
+    response.message = (
+        "Approved patient brief translated to Spanish."
+            if enhancement.ai_status is not None and enhancement.ai_status.used
+            else "Translation fell back to the approved English patient brief."
+    );
+    return response;
+}
+
+def:pub simplify_patient_plan(
+    session_id: str = "demo-default", ai_mode: str = "live"
+) -> BackendResponse {
+    if not valid_ai_mode(ai_mode) or ai_mode.lower().strip() == "disabled" {
+        return failure_response(
+            "AI_MODE_INVALID",
+            "simplify_patient_plan requires ai_mode 'live' or 'mock'.",
+            True,
+            0
+        );
+    }
+    english_result = root spawn PatientPlanWalker(
+        session_id=session_id, language="English"
+    );
+    response: BackendResponse = first_response(
+        english_result.reports, "simplify_patient_plan.english"
+    );
+    if not response.success or response.patient_plan is None {
+        return response;
+    }
+    enhancement: BriefEnhancementAttempt = run_brief_enhancement(
+        response.patient_plan as PatientPlanDTO, ai_mode, "simplify"
+    );
+    response.patient_plan = enhancement.plan;
+    mark_recoverable_ai_fallback(response, enhancement.ai_status);
+    response.message = (
+        "Approved patient brief simplified without changing source facts."
+            if enhancement.ai_status is not None and enhancement.ai_status.used
+            else "Simplification fell back to the approved English patient brief."
+    );
+    return response;
 }
 
 def:pub ask_patient_question(
-    question: str, session_id: str = "demo-default"
+    question: str, session_id: str = "demo-default", ai_mode: str = "disabled"
 ) -> BackendResponse {
-    result = root spawn PatientQuestionWalker(session_id=session_id, question=question);
-    return first_response(result.reports, "ask_patient_question");
+    if not valid_ai_mode(ai_mode) {
+        return failure_response(
+            "AI_MODE_INVALID", "ai_mode must be 'disabled', 'live', or 'mock'.", True, 0
+        );
+    }
+    if ai_mode.lower().strip() == "disabled" {
+        result = root spawn PatientQuestionWalker(
+            session_id=session_id, question=question
+        );
+        return first_response(result.reports, "ask_patient_question");
+    }
+
+    session: DemoSession | None = find_session(session_id);
+    if session is None {
+        return failure_response(
+            "DEMO_NOT_LOADED",
+            "Load the synthetic encounter before asking a question.",
+            True,
+            0
+        );
+    }
+    active_session: DemoSession = session as DemoSession;
+    references: list[VerifiedFactReference] = [
+        VerifiedFactReference(id=fact.id, category=fact.category, value=fact.value)
+        for fact in [active_session->:SessionOwns:->[?:VerifiedFact]]
+        if (fact.visible_to_patient and not fact_is_conflicted(active_session, fact.id))
+    ];
+    match_attempt: QuestionMatchAttempt = run_question_match(
+        question, references, ai_mode
+    );
+    status: AIStatusDTO | None = match_attempt.ai_status;
+    restrict_ids: bool = (
+        status is not None
+        and (status.used or status.diagnostic_code.startswith("AI_MATCH_"))
+    );
+    result = root spawn PatientQuestionWalker(
+        session_id=session_id,
+        question=question,
+        restrict_to_fact_ids=restrict_ids,
+        allowed_fact_ids=match_attempt.matched_fact_ids,
+        ai_matching_used=status is not None and status.used
+    );
+    response: BackendResponse = first_response(result.reports, "ask_patient_question");
+    mark_recoverable_ai_fallback(response, status);
+    return response;
 }
 
 def:pub run_evidence_audit(session_id: str = "demo-default") -> BackendResponse {

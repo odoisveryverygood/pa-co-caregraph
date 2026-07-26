@@ -33,6 +33,9 @@ glob SAFE_FALLBACK: str = (
 walker PatientQuestionWalker {
     has session_id: str = "demo-default",
         question: str = "",
+        restrict_to_fact_ids: bool = False,
+        allowed_fact_ids: list[str] = [],
+        ai_matching_used: bool = False,
         answer: str = "",
         grounded: bool = False,
         source_fact_ids: list[str] = [],
@@ -74,6 +77,7 @@ walker PatientQuestionWalker {
             session is None
             or not here.visible_to_patient
             or fact_is_conflicted(session, here.id)
+            or (self.restrict_to_fact_ids and here.id not in self.allowed_fact_ids)
         ) {
             skip;
         }
@@ -158,7 +162,8 @@ walker PatientQuestionWalker {
             answer=self.answer,
             grounded=self.grounded,
             source_fact_ids=self.source_fact_ids,
-            fallback_used=fallback_used
+            fallback_used=fallback_used,
+            ai_matching_used=self.ai_matching_used
         );
         report response;
     }

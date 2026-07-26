@@ -1,8 +1,10 @@
 """Pa-Co CareGraph service entry point."""
 
 import from models {
+    AIStatusDTO,
     BackendResponse,
     CandidateFactDTO,
+    ExtractedCandidate,
     VerifiedFactDTO,
     CareGapDTO,
     PatientPlanDTO,
@@ -19,6 +21,7 @@ import from endpoints {
     run_care_gap_check,
     resolve_gap,
     generate_patient_plan,
+    simplify_patient_plan,
     ask_patient_question,
     run_evidence_audit,
     reset_demo,

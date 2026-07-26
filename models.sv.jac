@@ -1,5 +1,60 @@
 """Typed DTOs and persistent graph schema for Pa-Co CareGraph."""
 
+obj ExtractedCandidate {
+    has category: str = "",
+        value: str = "",
+        source_text: str = "",
+        source_chunk_id: str = "",
+        confidence: float = 0.0,
+        patient_visible_candidate: bool = False;
+}
+
+sem ExtractedCandidate.category = "One allowed category only: lab_order, follow_up, medication_instruction, referral, or language_preference. Never use diagnosis, treatment advice, emergency triage, or dosage.";
+sem ExtractedCandidate.value = "A concise normalization of only what the source states. Never infer, diagnose, recommend, prescribe, add a dose, or fill missing details.";
+sem ExtractedCandidate.source_text = "Exact verbatim evidence copied from one transcript chunk.";
+sem ExtractedCandidate.source_chunk_id = "The exact identifier of the transcript chunk containing source_text.";
+sem ExtractedCandidate.confidence = "Extraction confidence from 0.0 through 1.0, not clinical certainty.";
+sem ExtractedCandidate.patient_visible_candidate = "Whether the statement might later be patient-facing after clinician approval. This never makes the unverified candidate patient-visible.";
+
+obj AIStatusDTO {
+    has requested: bool = False,
+        used: bool = False,
+        fallback_used: bool = False,
+        mode: str = "disabled",
+        diagnostic_code: str = "",
+        diagnostic_message: str = "";
+}
+
+obj TranslatedBriefText {
+    has medication_texts: list[str] = [],
+        lab_texts: list[str] = [],
+        referral_texts: list[str] = [],
+        follow_up_texts: list[str] = [],
+        checklist: list[str] = [];
+}
+
+sem TranslatedBriefText.medication_texts = "Translated approved medication instructions in the same order and count.";
+sem TranslatedBriefText.lab_texts = "Translated approved laboratory instructions in the same order and count.";
+sem TranslatedBriefText.referral_texts = "Translated approved referral instructions in the same order and count.";
+sem TranslatedBriefText.follow_up_texts = "Translated approved follow-up instructions in the same order and count.";
+sem TranslatedBriefText.checklist = "Translated checklist in the same order and count. Preserve every date, number, proper name, and bracketed source fact identifier exactly.";
+
+obj VerifiedFactReference {
+    has id: str = "",
+        category: str = "",
+        value: str = "";
+}
+
+sem VerifiedFactReference.id = "An approved graph fact identifier.";
+sem VerifiedFactReference.category = "The approved fact category.";
+sem VerifiedFactReference.value = "The exact approved stored value.";
+
+obj QuestionMatch {
+    has verified_fact_ids: list[str] = [];
+}
+
+sem QuestionMatch.verified_fact_ids = "Only identifiers copied from the supplied approved fact references that could answer the question. Return an empty list when none is relevant.";
+
 obj CandidateFactDTO {
     has id: str = "",
         category: str = "",
@@ -51,14 +106,18 @@ obj PatientPlanDTO {
         follow_ups: list[PlanItemDTO] = [],
         checklist: list[str] = [],
         source_fact_ids: list[str] = [],
-        generated_at: str = "";
+        generated_at: str = "",
+        ai_enhanced: bool = False,
+        translation_fallback_used: bool = False,
+        simplification_fallback_used: bool = False;
 }
 
 obj PatientAnswerDTO {
     has answer: str = "",
         grounded: bool = False,
         source_fact_ids: list[str] = [],
-        fallback_used: bool = False;
+        fallback_used: bool = False,
+        ai_matching_used: bool = False;
 }
 
 obj PatientDTO {
@@ -122,6 +181,8 @@ obj BackendResponse {
         message: str = "",
         recoverable: bool = False,
         current_graph_version: int = 0,
+        ai_status: AIStatusDTO | None = None,
+        extracted_candidates: list[ExtractedCandidate] = [],
         demo_state: DemoStateDTO | None = None,
         candidate_facts: list[CandidateFactDTO] = [],
         verified_fact: VerifiedFactDTO | None = None,

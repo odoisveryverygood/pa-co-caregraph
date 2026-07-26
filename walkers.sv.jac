@@ -1,6 +1,7 @@
 """Graph walkers and deterministic state projections for Pa-Co CareGraph."""
 
 import from models {
+    ExtractedCandidate,
     BackendResponse,
     CandidateFactDTO,
     CareGapDTO,
@@ -129,7 +130,7 @@ def fact_is_conflicted(session: DemoSession, fact_id: str) -> bool {
     return False;
 }
 
-def seed_session_graph(session: DemoSession) {
+def seed_transcript_graph(session: DemoSession) {
     patients: list[Patient] = [session->:HasPatient:->];
     if patients {
         return;
@@ -155,7 +156,6 @@ def seed_session_graph(session: DemoSession) {
     own_node(session, encounter);
     patient +>:HasEncounter():+> encounter;
 
-    chunks: list[TranscriptChunk] = [];
     for seed in prepared_transcript() {
         chunk = TranscriptChunk(
             session_id=session.id,
@@ -166,10 +166,26 @@ def seed_session_graph(session: DemoSession) {
         );
         own_node(session, chunk);
         encounter +>:ContainsChunk():+> chunk;
-        chunks.append(chunk);
     }
+}
 
+def seed_prepared_candidate_graph(session: DemoSession) -> bool {
+    patients: list[Patient] = [session->:HasPatient:->];
+    if not patients {
+        return False;
+    }
+    encounters: list[Encounter] = [patients[0]->:HasEncounter:->];
+    if not encounters {
+        return False;
+    }
+    encounter: Encounter = encounters[0];
+    chunks: list[TranscriptChunk] = [encounter->:ContainsChunk:->];
+    created_any: bool = False;
     for seed in prepared_candidates() {
+        existing: list[CandidateFact] = [encounter->:HasCandidate:->[?:CandidateFact, id==seed.id]];
+        if existing {
+            continue;
+        }
         source_chunks: list[TranscriptChunk] = [
             chunk
             for chunk in chunks
@@ -192,6 +208,15 @@ def seed_session_graph(session: DemoSession) {
         own_node(session, candidate);
         encounter +>:HasCandidate():+> candidate;
         candidate +>:ExtractedFrom():+> source_chunk;
+        created_any = True;
+    }
+    return created_any;
+}
+
+def seed_session_graph(session: DemoSession, include_candidates: bool = True) {
+    seed_transcript_graph(session);
+    if include_candidates {
+        _ = seed_prepared_candidate_graph(session);
     }
 }
 
@@ -368,6 +393,196 @@ walker ConsultationIngestWalker {
     }
 }
 
+walker AIConsultationIngestWalker {
+    has session_id: str = "demo-ai",
+        reports: list[BackendResponse] = [];
+
+    can locate with Root entry {
+        if not self.session_id.strip() {
+            report failure_response(
+                "INVALID_SESSION_ID", "session_id must not be empty.", True, 0
+            );
+            disengage;
+        }
+        existing: list[DemoSession] = [root-->[?:DemoSession, id==self.session_id]];
+        if existing {
+            candidates: list[CandidateFact] = [existing[0]->:SessionOwns:->[?:CandidateFact]];
+            verified: list[VerifiedFact] = [existing[0]->:SessionOwns:->[?:VerifiedFact]];
+            if candidates or verified {
+                report failure_response(
+                    "AI_SESSION_ALREADY_INITIALIZED",
+                    (
+                        "Use a fresh synthetic session id for optional AI "
+                        "ingestion so existing graph state is never overwritten."
+                    ),
+                    True,
+                    existing[0].graph_version
+                );
+                disengage;
+            }
+            visit existing[0];
+        } else {
+            fresh = root ++> DemoSession(
+                id=self.session_id, synthetic=True, graph_version=1
+            );
+            visit fresh;
+        }
+    }
+
+    can ingest_transcript_only with DemoSession entry {
+        seed_session_graph(here, include_candidates=False);
+        state: DemoStateDTO = build_demo_state(here);
+        response = success_response(
+            here.graph_version,
+            "Synthetic transcript loaded for optional typed extraction."
+        );
+        response.demo_state = state;
+        report response;
+    }
+}
+
+def canonical_candidate_id(candidate: ExtractedCandidate) -> str {
+    if candidate.category == "lab_order" {
+        return "candidate-lab";
+    }
+    if candidate.category == "follow_up" {
+        return "candidate-follow-up";
+    }
+    if candidate.category == "medication_instruction" {
+        return "candidate-medication";
+    }
+    if candidate.category == "referral" {
+        return "candidate-referral";
+    }
+    if candidate.category == "language_preference" {
+        return "candidate-language";
+    }
+    return f"candidate-{candidate.source_chunk_id}";
+}
+
+def candidate_created_at(candidate: ExtractedCandidate) -> str {
+    if candidate.source_chunk_id == "chunk-1" {
+        return "2026-07-26T18:00:01Z";
+    }
+    if candidate.source_chunk_id == "chunk-2" {
+        return "2026-07-26T18:00:02Z";
+    }
+    if candidate.source_chunk_id == "chunk-3" {
+        return "2026-07-26T18:00:03Z";
+    }
+    if candidate.source_chunk_id == "chunk-4" {
+        return "2026-07-26T18:00:04Z";
+    }
+    if candidate.source_chunk_id == "chunk-5" {
+        return "2026-07-26T18:00:05Z";
+    }
+    return "2026-07-26T18:00:06Z";
+}
+
+walker CandidateProposalWalker {
+    has session_id: str = "demo-ai",
+        proposals: list[ExtractedCandidate] = [],
+        created_any: bool = False,
+        reports: list[BackendResponse] = [];
+
+    can locate with Root entry {
+        session: DemoSession | None = find_session(self.session_id);
+        if session is None {
+            report failure_response(
+                "DEMO_NOT_LOADED",
+                "Load the synthetic transcript before adding proposals.",
+                True,
+                0
+            );
+            disengage;
+        }
+        visit session;
+    }
+
+    can add_pending_candidates with DemoSession entry {
+        patients: list[Patient] = [here->:HasPatient:->];
+        encounters: list[Encounter] = (
+            [patients[0]->:HasEncounter:->] if patients else []
+        );
+        if not encounters {
+            report failure_response(
+                "ENCOUNTER_NOT_FOUND",
+                "The synthetic encounter is missing.",
+                False,
+                here.graph_version
+            );
+            disengage;
+        }
+        encounter: Encounter = encounters[0];
+        chunks: list[TranscriptChunk] = [encounter->:ContainsChunk:->];
+
+        for proposal in self.proposals {
+            duplicates: list[CandidateFact] = [
+                candidate
+                for candidate in [encounter->:HasCandidate:->]
+                if (
+                    candidate.category == proposal.category
+                    and candidate.value == proposal.value
+                    and candidate.source_chunk_id == proposal.source_chunk_id
+                )
+            ];
+            if duplicates {
+                continue;
+            }
+            source_chunks: list[TranscriptChunk] = [
+                chunk
+                for chunk in chunks
+                if (
+                    chunk.id == proposal.source_chunk_id
+                    and proposal.source_text in chunk.text
+                )
+            ];
+            if not source_chunks {
+                report failure_response(
+                    "AI_SOURCE_EVIDENCE_MISSING",
+                    "A proposal lost transcript provenance before persistence.",
+                    True,
+                    here.graph_version
+                );
+                disengage;
+            }
+
+            base_id: str = canonical_candidate_id(proposal);
+            id_collisions: list[CandidateFact] = [encounter->:HasCandidate:->[?:CandidateFact, id==base_id]];
+            candidate_id: str = (
+                f"{base_id}-{proposal.source_chunk_id}" if id_collisions else base_id
+            );
+            candidate = CandidateFact(
+                session_id=here.id,
+                id=candidate_id,
+                category=proposal.category,
+                value=proposal.value,
+                confidence=proposal.confidence,
+                status="pending",
+                source_chunk_id=proposal.source_chunk_id,
+                created_at=candidate_created_at(proposal)
+            );
+            own_node(here, candidate);
+            encounter +>:HasCandidate():+> candidate;
+            candidate +>:ExtractedFrom():+> source_chunks[0];
+            self.created_any = True;
+        }
+
+        if self.created_any {
+            here.graph_version += 1;
+        }
+        state: DemoStateDTO = build_demo_state(here);
+        response = success_response(
+            here.graph_version,
+            "Validated proposals were stored only as pending candidate facts."
+        );
+        response.demo_state = state;
+        response.candidate_facts = state.candidate_facts;
+        response.extracted_candidates = self.proposals;
+        report response;
+    }
+}
+
 walker VerificationWalker {
     has session_id: str = "demo-default",
         fact_id: str = "",
@@ -518,11 +733,18 @@ walker VerificationWalker {
         verified +>:VerifiedBy():+> clinician;
 
         if here.category == "lab_order" {
+            lab_parts: list[str] = here.value.split(";");
+            test_name: str = lab_parts[0].strip();
+            due_window: str = (
+                lab_parts[1].strip().removeprefix("due ").strip()
+                    if len(lab_parts) > 1
+                    else ""
+            );
             lab = LabOrder(
                 session_id=session.id,
                 id=f"lab-{verified.id}",
-                test_name="blood test",
-                due_window="this week",
+                test_name=test_name,
+                due_window=due_window,
                 owner="",
                 status="ordered",
                 source_fact_id=verified.id
@@ -530,7 +752,7 @@ walker VerificationWalker {
             own_node(session, lab);
             verified +>:Materializes():+> lab;
         } elif here.category == "follow_up" {
-            period: str = "four weeks" if "four" in here.value else "two weeks";
+            period: str = here.value.removeprefix("return in ").strip();
             follow_up = FollowUp(
                 session_id=session.id,
                 id=f"follow-up-{verified.id}",
@@ -546,10 +768,7 @@ walker VerificationWalker {
             medication = MedicationInstruction(
                 session_id=session.id,
                 id=f"medication-{verified.id}",
-                instruction_text=(
-                    "Continue your current medication exactly as it appears "
-                    "on your existing prescription."
-                ),
+                instruction_text=source_chunks[0].text,
                 timing_text="Follow the timing on the existing prescription.",
                 active=True,
                 source_fact_id=verified.id
@@ -560,7 +779,7 @@ walker VerificationWalker {
             referral = Referral(
                 session_id=session.id,
                 id=f"referral-{verified.id}",
-                destination="community nutrition counselor",
+                destination=here.value,
                 owner="clinic referral team",
                 status="referred",
                 source_fact_id=verified.id

@@ -12,6 +12,7 @@ The backend owner controls:
 - `jac.toml`
 - `models.sv.jac`
 - `extraction.sv.jac`
+- `ai.sv.jac`
 - `walkers.sv.jac`
 - `patient_agent.sv.jac`
 - `endpoints.sv.jac`
@@ -29,12 +30,16 @@ must not edit those paths.
 - [x] Seed the deterministic Maya Rivera encounter without an AI dependency.
 - [x] Implement ingest, verification, gap, resolution, plan, question, audit,
       and reset walkers.
-- [x] Expose the ten required frontend actions plus the demo-only contradiction
-      action.
+- [x] Expose the ten required frontend actions, optional plan simplification,
+      and the demo-only contradiction action.
 - [x] Enforce patient-visibility, provenance, contradiction, and reset
       invariants.
 - [x] Add at least twenty backend tests.
 - [x] Run static checks, the complete test suite, and the P0 flow three times.
+- [x] Add optional typed extraction, Spanish translation, simplification, and
+      verified-fact question matching with deterministic fallbacks.
+- [x] Validate AI modes with `MockLLM`, no credentials, simulated provider
+      errors, simulated timeout, malformed output, and disabled AI.
 
 ## Common response envelope
 
@@ -47,6 +52,8 @@ BackendResponse
 - message: str
 - recoverable: bool
 - current_graph_version: int
+- ai_status: AIStatusDTO | None
+- extracted_candidates: list[ExtractedCandidate]
 - demo_state: DemoStateDTO | None
 - candidate_facts: list[CandidateFactDTO]
 - verified_fact: VerifiedFactDTO | None
@@ -57,11 +64,12 @@ BackendResponse
 - conflicts: list[ConflictDTO]
 ```
 
-On success, `success` is `true`, `error_code` is empty, and the action-specific
-field contains the result. On failure, `success` is `false`, `error_code` and
-`message` are populated, `recoverable` states whether corrected input can be
-retried, and `current_graph_version` is included whenever a demo session was
-found. Unused result fields are empty or `None`.
+On full success, `success` is `true`, `error_code` is empty, and the
+action-specific field contains the result. A recovered optional-AI failure also
+returns `success: true` because the deterministic result is usable, while
+`recoverable: true`, `error_code`, and `ai_status.fallback_used` describe the
+degraded AI attempt. On unrecovered failure, `success` is `false`. Unused
+result fields are empty or `None`.
 
 Jac clients receive the typed `BackendResponse` directly. Raw REST consumers
 receive Jac's standard transport envelope and read the object at
@@ -79,6 +87,22 @@ receive Jac's standard transport envelope and read the object at
 ## Required DTOs
 
 ```text
+ExtractedCandidate
+- category: str
+- value: str
+- source_text: str
+- source_chunk_id: str
+- confidence: float
+- patient_visible_candidate: bool
+
+AIStatusDTO
+- requested: bool
+- used: bool
+- fallback_used: bool
+- mode: str
+- diagnostic_code: str
+- diagnostic_message: str
+
 CandidateFactDTO
 - id: str
 - category: str
@@ -127,12 +151,16 @@ PatientPlanDTO
 - checklist: list[str]
 - source_fact_ids: list[str]
 - generated_at: str
+- ai_enhanced: bool
+- translation_fallback_used: bool
+- simplification_fallback_used: bool
 
 PatientAnswerDTO
 - answer: str
 - grounded: bool
 - source_fact_ids: list[str]
 - fallback_used: bool
+- ai_matching_used: bool
 
 PatientDTO
 - id: str
@@ -196,17 +224,30 @@ Inputs:
 
 ```text
 session_id: str = "demo-default"
+ai_mode: str = "disabled"
 ```
 
 Output: `BackendResponse.demo_state`. It contains Maya Rivera, five ordered
 transcript chunks, five pending candidate facts, and no verified facts.
 
-Possible errors: `INVALID_SESSION_ID`.
+`ai_mode` is `disabled`, `live`, or `mock`. `disabled` preserves the original
+deterministic ingest. `live` invokes typed `by llm()` extraction only for a
+fresh synthetic session. `mock` is the keyless deterministic `MockLLM` path
+used in tests. AI proposals are schema- and provenance-validated and persisted
+only as pending candidates. Any AI failure loads the five prepared candidates.
+
+Possible errors: `INVALID_SESSION_ID`, `AI_MODE_INVALID`,
+`AI_SESSION_ALREADY_INITIALIZED`. Recovered AI diagnostic codes include
+`AI_CREDENTIALS_MISSING`, `AI_TIMEOUT`, `AI_PROVIDER_ERROR`,
+`AI_MALFORMED_OUTPUT`, `AI_EMPTY_OUTPUT`, `AI_UNSUPPORTED_CATEGORY`,
+`AI_SOURCE_CHUNK_NOT_FOUND`, `AI_SOURCE_EVIDENCE_MISSING`,
+`AI_INVALID_CONFIDENCE`, `AI_PROHIBITED_MEDICAL_CONTENT`, and
+`AI_DUPLICATE_CANDIDATE`.
 
 Example request:
 
 ```json
-{"session_id": "demo-default"}
+{"session_id": "demo-default", "ai_mode": "disabled"}
 ```
 
 Example response:
@@ -478,17 +519,25 @@ Inputs:
 ```text
 language: str
 session_id: str = "demo-default"
+ai_mode: str = "disabled"
 ```
 
 Output: `BackendResponse.patient_plan`.
 
-Possible errors: `DEMO_NOT_LOADED`, `INVALID_LANGUAGE`, `NO_VISIBLE_FACTS`,
-`ACTIVE_CARE_GAPS`.
+When `ai_mode` is `live` or `mock` and `language` is Spanish, deterministic
+code first persists an approved English `PatientBrief`; AI translates only its
+text projection. Dates, numbers, checklist count, and source IDs are validated.
+Translation failure returns that approved English plan with
+`translation_fallback_used: true`.
+
+Possible errors: `DEMO_NOT_LOADED`, `INVALID_LANGUAGE`, `UNSUPPORTED_LANGUAGE`,
+`NO_VISIBLE_FACTS`, `ACTIVE_CARE_GAPS`, `AI_MODE_INVALID`. Recovered AI
+failures are reported through `ai_status`.
 
 Example request:
 
 ```json
-{"language": "English", "session_id": "demo-default"}
+{"language": "Spanish", "session_id": "demo-default", "ai_mode": "mock"}
 ```
 
 Example response:
@@ -522,7 +571,60 @@ Example response:
 ```
 
 Changes graph state: yes. A `PatientBrief` is persisted using approved,
-patient-visible, non-conflicting facts only.
+patient-visible, non-conflicting facts only. An optional translation is a
+validated response projection and cannot alter verified graph nodes or source
+IDs.
+
+### `simplify_patient_plan`
+
+Inputs:
+
+```text
+session_id: str = "demo-default"
+ai_mode: str = "live"
+```
+
+Output: `BackendResponse.patient_plan`.
+
+This action generates an approved English brief, then optionally simplifies
+only its text. It preserves structure, dates, numbers, obligations, and source
+IDs. On failure it returns approved English unchanged with
+`simplification_fallback_used: true`.
+
+Possible errors: `AI_MODE_INVALID`, `DEMO_NOT_LOADED`, `NO_VISIBLE_FACTS`,
+`ACTIVE_CARE_GAPS`. Recovered provider, timeout, credential, or validation
+failures appear in `ai_status`.
+
+Example request:
+
+```json
+{"session_id": "demo-default", "ai_mode": "mock"}
+```
+
+Example response:
+
+```json
+{
+  "success": true,
+  "ai_status": {
+    "requested": true,
+    "used": true,
+    "fallback_used": false,
+    "mode": "mock"
+  },
+  "patient_plan": {
+    "language": "English",
+    "ai_enhanced": true,
+    "source_fact_ids": ["verified-candidate-lab"],
+    "checklist": [
+      "Get the blood test this week. [source: verified-candidate-lab]"
+    ]
+  }
+}
+```
+
+Changes graph state: yes only because the approved English `PatientBrief` is
+created first. AI cannot mutate that brief or any verified graph record.
 
 ### `ask_patient_question`
 
@@ -531,16 +633,29 @@ Inputs:
 ```text
 question: str
 session_id: str = "demo-default"
+ai_mode: str = "disabled"
 ```
 
 Output: `BackendResponse.patient_answer`.
 
-Possible errors: `DEMO_NOT_LOADED`, `INVALID_QUESTION`.
+With AI enabled, the model receives only approved, patient-visible,
+non-conflicting fact references and may return IDs only. Deterministic code
+validates those IDs, retrieves the graph nodes, and constructs the factual
+answer. Provider failure falls back to deterministic matching. An
+unverified/unknown returned ID is rejected and produces the exact safe
+fallback.
+
+Possible errors: `DEMO_NOT_LOADED`, `INVALID_QUESTION`, `AI_MODE_INVALID`.
+Recovered matching failures appear in `ai_status`.
 
 Example request:
 
 ```json
-{"question": "When is my blood test?", "session_id": "demo-default"}
+{
+  "question": "When is my blood test?",
+  "session_id": "demo-default",
+  "ai_mode": "mock"
+}
 ```
 
 Example response:
@@ -552,7 +667,8 @@ Example response:
     "answer": "Your blood test is due this week and is assigned to clinic-lab-team.",
     "grounded": true,
     "source_fact_ids": ["verified-candidate-lab"],
-    "fallback_used": false
+    "fallback_used": false,
+    "ai_matching_used": true
   }
 }
 ```
@@ -708,6 +824,40 @@ Example response:
 Changes graph state: yes, through deterministic ingest and
 `VerificationWalker` only.
 
+## Optional AI configuration and fallback contract
+
+AI is off by default. No key is required for the reliable demo.
+
+```bash
+export PA_CO_AI_MODEL="gpt-4o-mini"
+export OPENAI_API_KEY="<provider key>"
+```
+
+`PA_CO_AI_API_KEY` may be used instead of the provider-specific variable
+because `jac.toml` maps it to `[byllm.model].api_key`. For Anthropic or Google,
+set `PA_CO_AI_MODEL` plus `ANTHROPIC_API_KEY` or `GOOGLE_API_KEY`.
+`BYLLM_DEFAULT_MODEL` overrides the configured model. Ollama (`ollama/...`) and
+installed Jac local models (`local:...`) require no API key.
+
+The checked-in `jac.toml` sets temperature `0.0`, output limit `1200`, and a
+request timeout of eight seconds. Typed calls use one corrective output retry.
+Keys remain environment-only and must never be placed in Git.
+
+For a frontend-callable action, use:
+
+```text
+ai_mode="disabled"  deterministic path, no model call
+ai_mode="live"      configured provider, validated fallback on every failure
+ai_mode="mock"      deterministic Jac MockLLM, tests/demo only
+```
+
+AI extraction failure still returns five pending prepared candidates. AI
+translation/simplification failure returns the approved English plan. AI
+question-matching failure uses deterministic matching; an invalid returned ID
+is denied and yields the exact safe fallback. In every recovered case the
+top-level result remains usable and `ai_status` records a non-sensitive
+diagnostic code.
+
 ## Safety invariants
 
 - Candidate facts are never patient-visible.
@@ -723,4 +873,10 @@ Changes graph state: yes, through deterministic ingest and
 - No deterministic or optional AI pathway diagnoses, recommends medication,
   changes dosage, declares treatment safe, performs emergency triage, or fills
   missing medical facts.
-- The P0 flow uses no model provider and requires no API key.
+- LLM functions return plain typed objects, never graph nodes.
+- Only deterministic code can persist validated AI output, and it can persist
+  extraction output only as `CandidateFact(status="pending")`.
+- Question matching sends only verified allow-list references and never lets a
+  model write the answer.
+- Translation and simplification preserve source IDs outside the model.
+- The deterministic P0 flow uses no model provider and requires no API key.
