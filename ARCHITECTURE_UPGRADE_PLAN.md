@@ -1,77 +1,70 @@
 # Jac architecture upgrade plan
 
-This implementation plan is the decision record for the production-shaped
-backend upgrade. It does not authorize deployment or real patient data.
+Status: implemented and release-verified.
 
 ## Rollback and checkpoints
 
-- Clean rollback commit: `865677e`.
-- Audit/characterization checkpoint: created before schema changes.
-- Canonical-topology checkpoint: created after graph/walker/provenance tests.
-- Final commit: `upgrade Pa-Co to production-shaped Jac-native architecture`.
-- Push only `origin/backend-jac`; never rewrite or merge history.
+- Baseline rollback point: `865677e`.
+- Audit/characterization checkpoint: `1d2909e`.
+- Canonical traversal/provenance checkpoint: `566a319`.
+- Pre-schema ignored runtime backup:
+  `/tmp/pa-co-jac-data-pre-upgrade.y9VDXs/data`.
+- Final release commit is repository `HEAD`; a commit cannot contain its own
+  hash.
 
-Before schema edits, copy ignored `.jac/data` to a temporary backup, then
-rebuild it from the deterministic synthetic seed. No tracked file or external
-database is involved.
+No tracked file, frontend file, unrelated session, secret, or real patient
+record was deleted. Jac's supported clean command was used only after the
+ignored `.jac/data` backup; that state contained resettable synthetic demo
+data.
 
 ## Target topology
 
 ```text
-Root -HasSession-> DemoSession -HasPatient-> Patient -HasEncounter-> Encounter
-Encounter -ContainsChunk-> TranscriptChunk
-Encounter -HasCandidate-> CandidateFact -ExtractedFrom-> TranscriptChunk
-CandidateFact -PromotedTo-> VerifiedFact -VerifiedFrom-> CandidateFact
-Encounter -HasVerifiedFact-> VerifiedFact
-VerifiedFact -RepresentsLabOrder/FollowUp/Medication/Referral-> obligation
-Encounter -HasTask-> CareTask -DependsOn-> VerifiedFact
-CareTask -AssignedTo-> CareOwner
-Encounter -HasGap-> CareGap -ResolvedBy-> GapResolutionEvent
-Patient -HasBrief-> PatientBrief -HasChecklistItem-> ChecklistItem
-ChecklistItem -SupportedBy-> VerifiedFact
-Patient -HasQuestion-> PatientQuestion -HasAnswer-> PatientAnswer
-PatientAnswer -AnsweredFrom-> VerifiedFact
-Encounter -HasConflict-> Conflict -ConflictEvidence(role)-> VerifiedFact
+Root -HasSession→ DemoSession -HasPatient→ Patient -HasEncounter→ Encounter
+Encounter -ContainsChunk→ TranscriptChunk
+Encounter -HasCandidate→ CandidateFact -ExtractedFrom→ TranscriptChunk
+CandidateFact -PromotedTo→ VerifiedFact -Represents*→ obligation
+Encounter -HasTask/HasGap→ CareTask/CareGap
+Patient -HasBrief→ PatientBrief -HasChecklistItem→ ChecklistItem
+Patient -HasQuestion→ PatientQuestion -HasAnswer→ PatientAnswer
+ChecklistItem/PatientAnswer -SupportedBy/AnsweredFrom→ VerifiedFact
+VerifiedFact -VerifiedFrom→ CandidateFact
 ```
 
-Every `CareNode` also retains `SessionOwns` solely for reset and an explicit
-`session_id` defense-in-depth assertion.
+This topology is implemented with endpoint-constrained clinical edges.
+`SessionOwns` remains only the reset/ownership boundary.
 
-## Implementation sequence
+## Completed migration
 
-1. Add string-backed enums, additive DTO fields, output/provenance DTOs, event
-   and output nodes, and endpoint-constrained domain edges.
-2. Rewrite projections to traverse patient/encounter relationships and expose a
-   session-scoped relationship DTO list.
-3. Rewrite ingest and verification with mismatch detection, decision events,
-   explicit obligation edges, and per-obligation tasks.
-4. Rewrite gap detection/resolution, plan, question, audit, provenance, and
-   reset as real walkers with actual traversal traces.
-5. Keep the 12 public `def:pub` signatures stable and add only
-   `trace_provenance(output_id, session_id)`.
-6. Harden AI validation, add enum-typed results where compatible, configure one
-   output retry, and add diagnostic malformed-mock mode.
-7. Verify generated HTTP routes, restart persistence, graph visualization,
-   logical session isolation, and private-root capability.
-8. Run every prior test plus the expanded suite and twenty full acceptance
-   cycles before final documentation and push.
+1. Audited the baseline contract, persistence, graph queries, AI, server, and
+   security capabilities; added characterization tests.
+2. Backed up ignored synthetic runtime data and cleaned it with Jac.
+3. Added string-backed safety enums, precise semantics, event/output nodes,
+   relationship DTOs, traces, and provenance DTOs.
+4. Reworked core behavior into explicit visit-driven domain traversal.
+5. Preserved all 12 existing function names/signatures and added only
+   `trace_provenance`.
+6. Hardened optional AI and added valid/malformed MockLLM acceptance modes.
+7. Added topology, provenance, trace, cross-session, endpoint, persistence,
+   auth-root, injection, and 20-cycle acceptance verification.
+8. Updated contract, demo, judge, frontend, model, audit, and capability
+   documentation.
 
-## Backward compatibility
+## Compatibility
 
-- Existing public action names, parameter order, defaults, DTO field names, and
-  safe fallback text remain unchanged.
-- New DTO fields have safe defaults and are additive.
-- Raw REST consumers continue reading the typed result from
-  `data.result` inside Jac's generated transport envelope.
-- Existing frontend-owned files are never edited.
+- Existing DTO fields and public function signatures remain.
+- Additive fields have safe empty defaults.
+- Existing string values remain the API representation of internal enums.
+- Generated `/function/*` routes remain the only production-shaped public
+  route layer; no second framework was added.
+- Old briefs and answers remain persisted for audit but become non-current
+  after supporting graph changes or conflicts.
 
 ## Intentionally omitted
 
-- production login in the hackathon flow;
-- HIPAA/compliance claims;
-- cloud deployment;
-- real patient ingestion;
-- local-model download or newly created paid API key;
-- ModelPool, tools, AI graph mutation, and AI-guided traversal;
-- automated clinical conflict resolution;
-- a second server, ORM, or database.
+- ModelPool, tool calling, AI graph mutation, and AI-guided traversal.
+- A multi-gigabyte local model download or creation of a paid cloud key.
+- Login changes to the shared synthetic hackathon demo.
+- Deployment, production JWT/admin configuration, HIPAA claims, and PHI.
+- Automated conflict winner selection or medical decision support.
+- Frontend-owned code or styling changes.

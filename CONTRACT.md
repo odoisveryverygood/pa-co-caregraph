@@ -1,8 +1,10 @@
 # Pa-Co CareGraph backend contract
 
-Status: P0 contract for Jac 0.34.7. The frontend may depend on every type and
-action documented here. Contract changes after frontend integration require a
-documented migration note and coordination with the frontend owner.
+Status: production-shaped compatibility contract for Jac 0.34.7. The frontend
+may depend on every type and action documented here. All original public
+function names and request signatures are preserved. New fields and
+`trace_provenance` are additive. Contract changes after frontend integration
+require a documented migration note and coordination with the frontend owner.
 
 ## Ownership boundary
 
@@ -30,8 +32,8 @@ must not edit those paths.
 - [x] Seed the deterministic Maya Rivera encounter without an AI dependency.
 - [x] Implement ingest, verification, gap, resolution, plan, question, audit,
       and reset walkers.
-- [x] Expose the ten required frontend actions, optional plan simplification,
-      and the demo-only contradiction action.
+- [x] Preserve the twelve existing public action signatures and add
+      `trace_provenance`.
 - [x] Enforce patient-visibility, provenance, contradiction, and reset
       invariants.
 - [x] Add at least twenty backend tests.
@@ -40,6 +42,10 @@ must not edit those paths.
       verified-fact question matching with deterministic fallbacks.
 - [x] Validate AI modes with `MockLLM`, no credentials, simulated provider
       errors, simulated timeout, malformed output, and disabled AI.
+- [x] Add canonical visit-driven topology, decision/resolution events,
+      independent checklist/answer nodes, traces, and backward provenance.
+- [x] Prove generated endpoint behavior, reload persistence, cross-session
+      rejection, private-walker enforcement, and authenticated-root isolation.
 
 ## Common response envelope
 
@@ -62,6 +68,9 @@ BackendResponse
 - patient_plan: PatientPlanDTO | None
 - patient_answer: PatientAnswerDTO | None
 - conflicts: list[ConflictDTO]
+- created_graph_ids: list[str]
+- traversal_trace: list[TraversalStepDTO]
+- provenance_chains: list[ProvenanceChainDTO]
 ```
 
 On full success, `success` is `true`, `error_code` is empty, and the
@@ -80,9 +89,15 @@ receive Jac's standard transport envelope and read the object at
   "ok": true,
   "type": "response",
   "data": {"result": {"success": true}, "reports": []},
-  "error": null
+  "error": null,
+  "meta": {}
 }
 ```
+
+The outer `ok` reports transport/runtime handling; the nested
+`BackendResponse.success` reports domain success. Jac 0.34.7 may return HTTP
+200 with `data.error` for a missing required generated-function argument, so
+raw clients must inspect the envelope as well as `data.result`.
 
 ## Required DTOs
 
@@ -134,6 +149,7 @@ CareGapDTO
 - due_date: str
 
 PlanItemDTO
+- id: str
 - kind: str
 - text: str
 - owner: str
@@ -156,6 +172,7 @@ PatientPlanDTO
 - simplification_fallback_used: bool
 
 PatientAnswerDTO
+- id: str
 - answer: str
 - grounded: bool
 - source_fact_ids: list[str]
@@ -189,6 +206,33 @@ ConflictDTO
 - left_source_text: str
 - right_source_text: str
 
+TraversalStepDTO
+- order: int
+- walker_name: str
+- current_node_id: str
+- current_node_type: str
+- edge_type: str
+- action: str
+- outcome: str
+- human_explanation: str
+
+ProvenanceChainDTO
+- output_id: str
+- output_type: str
+- source_fact_id: str
+- candidate_fact_id: str
+- transcript_chunk_id: str
+- encounter_id: str
+- patient_id: str
+- source_text: str
+- complete: bool
+
+GraphRelationshipDTO
+- from_id: str
+- edge_type: str
+- to_id: str
+- role: str
+
 CareGraphDTO
 - patient: PatientDTO | None
 - encounter: EncounterDTO | None
@@ -198,6 +242,7 @@ CareGraphDTO
 - care_gaps: list[CareGapDTO]
 - patient_plan: PatientPlanDTO | None
 - conflicts: list[ConflictDTO]
+- relationships: list[GraphRelationshipDTO]
 - graph_version: int
 
 DemoStateDTO
@@ -211,6 +256,26 @@ DemoStateDTO
 - conflicts: list[ConflictDTO]
 - graph_version: int
 ```
+
+Internal candidate category/status, gap type/status, conflict type, language,
+and verification-decision enums serialize to the existing strings shown in
+this contract.
+
+`CareGraphDTO.relationships` is a read projection of persisted typed edges.
+Each relationship contains `from_id`, `edge_type`, `to_id`, and an optional
+role such as `left` or `right` for conflict evidence. It is the supported
+frontend graph-visualization input.
+
+Mutations populate `created_graph_ids` when new persistent records are
+created. With `DEMO_TRACE_ENABLED=true`, internal walkers append
+`traversal_trace` during actual node entry and edge-following events. The field
+is empty by default and never includes prompts, hidden reasoning, credentials,
+or private patient data.
+
+When supporting graph state changes or becomes conflicted, previously
+generated briefs, checklist items, questions, and answers are marked
+non-current. They remain audit history but cannot be returned as current
+patient-facing output or traced through the public current-output action.
 
 ## Callable actions
 
@@ -230,11 +295,13 @@ ai_mode: str = "disabled"
 Output: `BackendResponse.demo_state`. It contains Maya Rivera, five ordered
 transcript chunks, five pending candidate facts, and no verified facts.
 
-`ai_mode` is `disabled`, `live`, or `mock`. `disabled` preserves the original
-deterministic ingest. `live` invokes typed `by llm()` extraction only for a
-fresh synthetic session. `mock` is the keyless deterministic `MockLLM` path
-used in tests. AI proposals are schema- and provenance-validated and persisted
-only as pending candidates. Any AI failure loads the five prepared candidates.
+`ai_mode` is `disabled`, `live`, `mock`, or `mock_malformed`. `disabled`
+preserves deterministic ingest. `live` invokes typed `by llm()` extraction
+only for a fresh synthetic session. `mock` is the valid keyless `MockLLM`
+path. `mock_malformed` deliberately exercises recoverable malformed output and
+is not for production. AI proposals are schema- and provenance-validated and
+persisted only as pending candidates. Any AI failure loads the five prepared
+candidates.
 
 Possible errors: `INVALID_SESSION_ID`, `AI_MODE_INVALID`,
 `AI_SESSION_ALREADY_INITIALIZED`. Recovered AI diagnostic codes include
@@ -242,7 +309,8 @@ Possible errors: `INVALID_SESSION_ID`, `AI_MODE_INVALID`,
 `AI_MALFORMED_OUTPUT`, `AI_EMPTY_OUTPUT`, `AI_UNSUPPORTED_CATEGORY`,
 `AI_SOURCE_CHUNK_NOT_FOUND`, `AI_SOURCE_EVIDENCE_MISSING`,
 `AI_INVALID_CONFIDENCE`, `AI_PROHIBITED_MEDICAL_CONTENT`, and
-`AI_DUPLICATE_CANDIDATE`.
+`AI_DUPLICATE_CANDIDATE`. Instruction-injection and fabricated-detail
+rejections are also recoverable validation failures.
 
 Example request:
 
@@ -551,6 +619,7 @@ Example response:
     "medications": [],
     "labs": [
       {
+        "id": "checklist-demo-default-9-1",
         "kind": "lab",
         "text": "Complete the blood test this week.",
         "owner": "clinic-lab-team",
@@ -664,6 +733,7 @@ Example response:
 {
   "success": true,
   "patient_answer": {
+    "id": "answer-demo-default-10",
     "answer": "Your blood test is due this week and is assigned to clinic-lab-team.",
     "grounded": true,
     "source_fact_ids": ["verified-candidate-lab"],
@@ -679,6 +749,7 @@ Unknown-answer example:
 {
   "success": true,
   "patient_answer": {
+    "id": "answer-demo-default-11",
     "answer": "This is not recorded in your approved care plan. Please contact your clinic.",
     "grounded": false,
     "source_fact_ids": [],
@@ -730,6 +801,58 @@ Example response:
 
 Changes graph state: yes only when a new `Conflict` is persisted. Repeated
 audits are idempotent and never pick a clinically correct side.
+
+### `trace_provenance`
+
+Inputs:
+
+```text
+output_id: str
+session_id: str = "demo-default"
+```
+
+`output_id` must be the stable `PlanItemDTO.id` for a current checklist item or
+the stable `PatientAnswerDTO.id` for a current patient answer.
+
+Output: `BackendResponse.provenance_chains`. One chain is returned for each
+supporting fact. Every complete chain identifies the output, verified fact,
+candidate, transcript chunk, encounter, patient, and original source text.
+
+Possible errors: `INVALID_OUTPUT_ID`, `DEMO_NOT_LOADED`, `OUTPUT_NOT_FOUND`,
+`PROVENANCE_INCOMPLETE`. An output from another session is deliberately
+reported as `OUTPUT_NOT_FOUND`.
+
+Example request:
+
+```json
+{
+  "output_id": "checklist-demo-default-9-1",
+  "session_id": "demo-default"
+}
+```
+
+Example response:
+
+```json
+{
+  "success": true,
+  "provenance_chains": [
+    {
+      "output_id": "checklist-demo-default-9-1",
+      "output_type": "ChecklistItem",
+      "source_fact_id": "verified-candidate-lab",
+      "candidate_fact_id": "candidate-lab",
+      "transcript_chunk_id": "chunk-1",
+      "encounter_id": "encounter-maya-001",
+      "patient_id": "patient-maya",
+      "source_text": "We will order a blood test to be completed this week.",
+      "complete": true
+    }
+  ]
+}
+```
+
+Changes graph state: no.
 
 ### `reset_demo`
 
@@ -849,6 +972,7 @@ For a frontend-callable action, use:
 ai_mode="disabled"  deterministic path, no model call
 ai_mode="live"      configured provider, validated fallback on every failure
 ai_mode="mock"      deterministic Jac MockLLM, tests/demo only
+ai_mode="mock_malformed" deliberately invalid MockLLM, recovery tests only
 ```
 
 AI extraction failure still returns five pending prepared candidates. AI

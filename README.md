@@ -1,134 +1,114 @@
 # Pa-Co CareGraph
 
-Pa-Co CareGraph is a Jac-native verified continuity-of-care graph that turns synthetic consultation information into clinician-approved, traceable patient follow-up plans.
+Pa-Co CareGraph is a Jac-native verified continuity-of-care graph that turns
+synthetic consultation information into clinician-approved, traceable patient
+follow-up plans.
 
-The deterministic Jac backend is ready for frontend integration. Frontend
-development is proceeding separately.
+Development is underway. The production-shaped backend is implemented on Jac
+0.34.7; frontend work remains separately owned.
 
 ## Backend status
 
-The P0 backend runs entirely on Jac 0.34.7. It ingests a deterministic synthetic
-consultation, exposes candidate facts for clinician review, promotes only
-accepted facts into a persistent care graph, detects documentation gaps,
-records audited resolutions, builds an approved-only patient brief, answers
-questions from graph evidence, and preserves contradictory statements for
-review.
+The reliable path is deterministic and needs no model or API key. It loads the
+synthetic Maya Rivera consultation, proposes five pending facts, records
+clinician decisions, creates typed care obligations, detects documentation
+gaps, stores append-only resolutions, generates an approved-only checklist,
+answers from stored evidence, detects contradictions without overwriting
+either statement, and resets one synthetic session.
 
-No model API or credential is required for the reliable demo. Optional typed
-AI can propose unverified candidates, translate or simplify an approved brief,
-and match questions to an allow-list of verified fact IDs. Every optional path
-is validated and falls back deterministically. The backend does not diagnose,
-recommend medication, change dosage, determine treatment safety, perform
-emergency triage, or invent missing facts.
+Optional Jac `by llm()` helpers may propose unverified candidates, translate or
+simplify an approved brief, and select relevant verified IDs. Deterministic code
+validates every result and remains the only code that can mutate the graph.
 
-The exact frontend contract, typed response objects, errors, and payload
-examples are in [CONTRACT.md](CONTRACT.md).
+See [CONTRACT.md](CONTRACT.md) for the stable frontend interface,
+[JAC_DEMO_GUIDE.md](JAC_DEMO_GUIDE.md) for the demo, and
+[TECHNICAL_JUDGE_GUIDE.md](TECHNICAL_JUDGE_GUIDE.md) for verification evidence.
 
-## Run the backend
+## Start and verify
 
-Prerequisite:
+Use the pinned compiler:
 
 ```bash
-jac --version
+/Users/aradhyamishra/.local/bin/jac --version
+/Users/aradhyamishra/.local/bin/jac start main.jac --no-client
 ```
 
-The required version is `jac 0.34.7`. Start the API-only service:
+The generated service listens at <http://localhost:8000>. Useful routes are
+`/docs`, `/openapi.json`, `/healthz`, and `POST /function/<action>`.
+
+Run the complete gate from the repository root:
 
 ```bash
-jac start main.jac --no-client
+/Users/aradhyamishra/.local/bin/jac clean --all --force
+/Users/aradhyamishra/.local/bin/jac fmt . --check
+/Users/aradhyamishra/.local/bin/jac check .
+/Users/aradhyamishra/.local/bin/jac test -d tests/ -v
+/Users/aradhyamishra/.local/bin/jac run tests/server_integration.jac
+/Users/aradhyamishra/.local/bin/jac run tests/production_demo.jac
 ```
 
-The service is available at <http://localhost:8000>, Swagger at
-<http://localhost:8000/docs>, and health status at
-<http://localhost:8000/healthz>.
+`production_demo.jac` executes 36 checks in each cycle, five cycles in each of
+four mandatory modes: AI disabled, missing-key fallback, valid MockLLM, and
+malformed MockLLM. That is 20 full cycles and 720 checked steps.
 
-## Verify the backend
+## Canonical graph
 
-Run static checks and the complete backend suite:
-
-```bash
-jac check .
-jac clean --data --force
-jac test -d tests/
-```
-
-Run the full P0 acceptance flow three consecutive times:
-
-```bash
-jac clean --data --force
-jac run tests/p0_demo.jac
-```
-
-Run the complete flow with AI enabled through Jac `MockLLM`, AI disabled,
-missing live credentials, and mock output:
-
-```bash
-jac clean --data --force
-env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY -u GOOGLE_API_KEY \
-  -u PA_CO_AI_API_KEY -u BYLLM_DEFAULT_MODEL \
-  PA_CO_AI_MODEL=gpt-4o-mini jac run tests/ai_modes_demo.jac
-```
-
-The acceptance script resets each synthetic session, verifies four facts,
-rejects the language candidate, detects and resolves the two prepared gaps,
-generates a brief, answers the blood-test question, creates the four-week
-contradiction, audits it, and confirms both follow-up statements remain.
-
-## Graph schema
-
-The graph is rooted by a synthetic `DemoSession`; every owned node also has a
-`SessionOwns` link so reset can remove only that session's demonstration data.
+`SessionOwns` is retained only as the synthetic-session reset boundary.
+Clinical behavior navigates domain relationships:
 
 ```text
-Root
-└── DemoSession
-    ├── Patient ──HasEncounter──> Encounter
-    │                              ├──ContainsChunk──> TranscriptChunk
-    │                              ├──HasCandidate───> CandidateFact
-    │                              └──HasVerifiedFact> VerifiedFact
-    ├── CareGap
-    ├── CareTask ──AssignedTo────> CareOwner
-    │             └─DependsOn────> VerifiedFact
-    ├── Conflict
-    └── PatientQuestion ─AnsweredFrom─> VerifiedFact
-
-CandidateFact ─ExtractedFrom─> TranscriptChunk
-VerifiedFact  ─VerifiedFrom──> CandidateFact
-VerifiedFact  ─VerifiedBy────> ClinicianIdentity
-VerifiedFact  ─Materializes──> LabOrder | FollowUp | MedicationInstruction | Referral
-LabOrder      ─RequiresFollowUp─> FollowUp
-VerifiedFact  ─Contradicts─────> VerifiedFact
-VerifiedFact  ─VisibleToPatient> PatientBrief
+Root -HasSession→ DemoSession -HasPatient→ Patient -HasEncounter→ Encounter
+Encounter -ContainsChunk→ TranscriptChunk
+Encounter -HasCandidate→ CandidateFact -ExtractedFrom→ TranscriptChunk
+CandidateFact -PromotedTo→ VerifiedFact -Represents*→ obligation
+Encounter -HasTask/HasGap→ CareTask/CareGap
+Patient -HasBrief→ PatientBrief -HasChecklistItem→ ChecklistItem
+Patient -HasQuestion→ PatientQuestion -HasAnswer→ PatientAnswer
+ChecklistItem -SupportedBy→ VerifiedFact
+PatientAnswer -AnsweredFrom→ VerifiedFact
+VerifiedFact -VerifiedFrom→ CandidateFact
 ```
 
-Persistent domain nodes are defined in `models.sv.jac`. Candidate provenance is
-immutable in the public interface, and `VerifiedFact` construction exists only
-inside `VerificationWalker`.
+Four endpoint-constrained representation edges distinguish medication, lab,
+referral, and follow-up obligations. Typed relationships also represent task
+assignment, gap resolution, clinician verification, provenance, patient
+visibility, conflict evidence roles, contradiction, and supersession.
+
+Every accepted or rejected decision creates a `VerificationEvent`. Every gap
+resolution creates a `GapResolutionEvent`. Brief checklist items and patient
+answers are independent persistent nodes so their evidence can be traversed.
+When supporting facts change or become conflicted, old outputs remain as audit
+history but are marked non-current.
 
 ## Walkers
 
-- `ConsultationIngestWalker` creates the prepared chunks and source-linked
-  candidates idempotently.
-- `VerificationWalker` is the sole promotion boundary. Rejection never creates
-  a verified node; repeated acceptance returns the existing verified fact.
-- `CareGapWalker` performs documentation-completeness checks and persists each
-  unique gap once.
-- `GapResolutionWalker` validates required resolution fields, updates the
-  relevant care node, creates a task/owner relationship, and appends an audit
-  record.
-- `PatientPlanWalker` traverses approved, patient-visible, non-conflicting
-  facts only and stores a sourced `PatientBrief`.
-- `PatientQuestionWalker` answers only through verified nodes and resolved
-  tasks. Unknown questions use the exact safe fallback.
-- `EvidenceAuditWalker` detects duplicates, unverified attempted changes,
-  superseded facts, and contradictory follow-up periods without choosing a
-  clinical winner.
-- `ResetDemoWalker` deletes only nodes owned by the named synthetic session and
-  recreates the exact prepared state.
+- `ConsultationIngestWalker` creates and validates one deterministic session
+  topology without creating verified information.
+- `VerificationWalker` is the sole promotion boundary; it is session-scoped,
+  event-audited, and idempotent.
+- `CareGapWalker` derives documentation gaps from verified obligations,
+  tasks, owners, and dates without making medical decisions.
+- `GapResolutionWalker` updates the related task topology and appends a
+  resolution event.
+- `PatientPlanWalker` visits only visible, verified, non-conflicted support and
+  persists sourced checklist items.
+- `PatientQuestionWalker` matches categories and stored terms, then assembles
+  answers from verified graph values and resolved tasks only.
+- `EvidenceAuditWalker` creates idempotent role-bearing conflicts and
+  invalidates affected current outputs without selecting a winner.
+- `TraceProvenanceWalker` walks backward from an item or answer to verified
+  fact, candidate, transcript chunk, encounter, and patient.
+- `ResetDemoWalker` removes only the selected synthetic session ownership
+  boundary and recreates its deterministic topology.
+
+Traversal traces are recorded at actual walker entry and edge-follow events
+only when `DEMO_TRACE_ENABLED=true`. They contain no prompts, hidden reasoning,
+credentials, or private patient data.
 
 ## Public actions
 
-The frontend-callable Jac functions are:
+All existing names and request signatures remain compatible, with one additive
+action:
 
 ```text
 load_demo_encounter(session_id="demo-default", ai_mode="disabled")
@@ -143,135 +123,79 @@ ask_patient_question(question, session_id="demo-default", ai_mode="disabled")
 run_evidence_audit(session_id="demo-default")
 reset_demo(session_id="demo-default")
 add_demo_contradiction(session_id="demo-default")
+trace_provenance(output_id, session_id="demo-default")
 ```
 
-Jac exposes these at `POST /function/<action>` for raw REST consumers. Jac
-clients should import and call them as typed server functions.
+The compatibility functions are thin typed entry points that spawn the
+internal walkers. Raw HTTP consumers read `BackendResponse` at
+`data.result` inside Jac's transport envelope. The additive response fields
+are `created_graph_ids`, `traversal_trace`, `provenance_chains`, relationship
+projections, and persistent plan-item/answer IDs.
+
+## Optional AI
+
+Copy variable names from `.env.example`; never commit a populated `.env`.
+Configuration is documented in [MODEL_SETUP.md](MODEL_SETUP.md). AI is off by
+default. Mandatory keyless test modes are:
+
+```text
+disabled        deterministic path
+mock            valid typed MockLLM
+mock_malformed  deliberately malformed MockLLM with deterministic fallback
+live            configured provider, always guarded by fallback
+```
+
+Extraction validates schema, allowed enums, session-local chunks, exact
+evidence, confidence, duplicates, fabricated details, prohibited medical
+behavior, and instruction-injection attempts. Translation preserves dates,
+names, numbers, checklist structure, and source IDs. Question AI may return
+only IDs from the current verified, visible, non-conflicted allow-list; the
+answer is always assembled deterministically.
+
+No cloud key was created and no multi-gigabyte local model was downloaded.
 
 ## Frontend integration
 
-From a client-owned Jac module:
+Client-owned Jac imports the functions and DTOs from `endpoints` and `models`
+using `sv import`, then awaits calls. Treat `BackendResponse.success` as the
+branch point, display recoverable messages, use stable DTO IDs, and never
+reimplement verification or graph rules in frontend code.
 
-```jac
-sv import from endpoints {
-    load_demo_encounter,
-    get_candidate_facts,
-    verify_fact,
-    get_care_graph,
-    run_care_gap_check,
-    resolve_gap,
-    generate_patient_plan,
-    simplify_patient_plan,
-    ask_patient_question,
-    run_evidence_audit,
-    reset_demo,
-    add_demo_contradiction,
-}
-sv import from models {
-    BackendResponse,
-    CandidateFactDTO,
-    CareGraphDTO,
-    PatientPlanDTO,
-}
-```
+Exact mappings and an integration sequence are in
+[FRONTEND_HANDOFF.md](FRONTEND_HANDOFF.md). Backend work does not edit
+`frontend.cl.jac`, `frontend.impl.jac`, `components/`, `styles/`, frontend mock
+data, or frontend tests.
 
-Calls from client async handlers must be awaited, for example:
+## Safety and limitations
 
-```jac
-response: BackendResponse = await load_demo_encounter();
-```
-
-Use the default session for the shared demo or pass a stable per-browser
-`session_id`. Treat `BackendResponse.success` as the branch point and display
-`message` for a recoverable failure. Do not reconstruct graph rules or
-candidate promotion in frontend code.
-
-## Deterministic fallback and optional AI seam
-
-`extraction.sv.jac` contains the five prepared facts and the later
-contradiction. The default P0 path never calls a model. `ai.sv.jac` contains
-Jac 0.34.7-compatible typed `by llm()` functions and deterministic
-`MockLLM` providers.
-
-Live AI is opt-in:
-
-```bash
-export PA_CO_AI_MODEL="gpt-4o-mini"
-export OPENAI_API_KEY="<provider key>"
-```
-
-`PA_CO_AI_API_KEY` is also supported by `jac.toml`. For another provider, set
-the model plus its standard variable (`ANTHROPIC_API_KEY` or
-`GOOGLE_API_KEY`). `BYLLM_DEFAULT_MODEL` overrides the configured model.
-Ollama and installed Jac local models do not require a key.
-
-The checked-in settings use temperature `0.0`, at most one typed-output
-correction retry, a 1200-token output cap, and an eight-second request timeout.
-Never place a key in `jac.toml`, source, tests, or `.env.example`.
-
-AI extraction receives only synthetic chunk IDs, speakers, and transcript
-text. Results are checked for required fields, category allow-list, source
-existence, verbatim evidence, confidence range, prohibited medical behavior,
-and duplicates. Deterministic code can then store them only as pending
-`CandidateFact` nodes. `VerificationWalker` remains the sole promotion path.
-
-Translation and simplification operate only on an approved English
-`PatientBrief`; dates, numbers, structure, and source IDs are validated.
-Question AI returns verified IDs only. Deterministic code retrieves those
-nodes and composes the answer.
-
-Fallback behavior:
-
-- extraction failure loads the five prepared pending candidates;
-- translation/simplification failure returns approved English unchanged;
-- provider failure during question matching uses deterministic graph matching;
-- an unknown or unverified returned ID is denied and uses the exact safe
-  fallback;
-- credentials, provider exceptions, timeout, malformed/empty output, and
-  validation failures never crash the demo.
-
-## Known limitations
-
-- Only the prepared synthetic Maya Rivera encounter is implemented.
-- The backend has no production identity, authorization, or real-patient-data
-  ingestion; it must not be used with protected health information.
-- English and Spanish are supported; deterministic Spanish remains available
-  with AI disabled, and validated AI translation is optional.
-- Conflict resolution is intentionally manual and not part of P0.
-- Due dates are P0 strings rather than timezone-aware clinical scheduling
-  objects.
-
-## Safety boundaries
-
-- Candidate, pending, and rejected facts never enter patient-facing output.
-- Every patient checklist item and grounded answer includes verified source fact
-  IDs.
-- Contradictions create `Conflict` nodes and preserve both source statements.
-- Unknown patient questions return: “This is not recorded in your approved care
-  plan. Please contact your clinic.”
-- Reset is restricted to synthetic sessions and cannot traverse unrelated
-  graph roots.
+- All included clinical-looking content is synthetic demonstration data.
+- Candidate, pending, rejected, and conflicted facts are excluded from current
+  patient output.
+- Unknown questions return exactly: “This is not recorded in your approved
+  care plan. Please contact your clinic.”
+- The system does not diagnose, prescribe, change dosage, determine treatment
+  safety, perform emergency triage, or invent missing information.
+- The anonymous public demo uses logical synthetic session IDs, not
+  authorization. It is not HIPAA compliant and must not receive PHI.
+- Isolated tests prove private walkers and separate authenticated Jac roots,
+  but login is intentionally not added to the hackathon demo.
+- Jac 0.34.7 returns some generated-endpoint argument errors inside an HTTP 200
+  transport response; clients must inspect the outer envelope and nested
+  `BackendResponse`.
+- `jac start --faux` prints its endpoint report but then encounters a 0.34.7
+  cleanup defect. It is not used as a release gate.
+- Conflict resolution is intentionally manual. Dates remain deterministic demo
+  strings rather than production scheduling objects.
 
 ## Backend files
 
-- `main.jac`
-- `jac.toml`
-- `models.sv.jac`
-- `extraction.sv.jac`
-- `ai.sv.jac`
-- `walkers.sv.jac`
-- `patient_agent.sv.jac`
-- `endpoints.sv.jac`
-- `tests/backend_tests.jac`
-- `tests/p0_demo.jac`
-- `tests/ai_tests.jac`
-- `tests/ai_modes_demo.jac`
-- `CONTRACT.md`
-- backend sections of `README.md`
+Core code is in `main.jac`, `models.sv.jac`, `extraction.sv.jac`,
+`ai.sv.jac`, `walkers.sv.jac`, `patient_agent.sv.jac`, `endpoints.sv.jac`,
+and `jac.toml`. Verification lives in `tests/`; architecture, contract, demo,
+model, judge, and frontend handoff documents live at the repository root.
 
-Because a Git commit cannot contain its own hash without changing that hash,
-the exact verified backend commit is reported in the handoff. At any checkout,
-obtain the current hash with:
+The architecture checkpoint is `566a319`. A commit cannot contain its own
+hash, so obtain the final checkout hash with:
 
 ```bash
 git rev-parse HEAD

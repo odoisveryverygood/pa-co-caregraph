@@ -1,93 +1,89 @@
-# Jac architecture red-team audit
+# Jac architecture audit
 
-Audit baseline: commit `865677e` on `backend-jac`, Jac 0.34.7.
+Baseline audited: `865677e`. Canonical architecture checkpoint: `566a319`.
 
-## Current topology
+## Baseline findings and resolution
 
-The current graph persists from `Root -> DemoSession`. A typed
-`SessionOwns` edge connects the session to every care node for reset. Domain
-edges connect patient, encounter, evidence, verified facts, specialized
-obligations, tasks, gaps, conflicts, briefs, and questions.
-
-The model already enforces important foundations:
-
-- transcript chunks and candidates are persistent nodes;
-- candidate provenance uses `ExtractedFrom`;
-- accepted facts use `VerifiedFrom` and `VerifiedBy`;
-- rejection creates no `VerifiedFact`;
-- specialized obligations are persistent;
-- gaps, tasks, resolution audits, conflicts, briefs, and questions persist;
-- reset deletes only nodes connected to the selected synthetic session;
-- no mutable module-level list or dictionary stores clinical graph state.
-
-## Feature audit
-
-| Feature | Source of truth | Current traversal | Responsible walker/action | Red-team finding |
-|---|---|---|---|---|
-| Session | `DemoSession` reachable from root | Root query by session ID | All walkers | Sound, but root edge is generic and not judge-visible as `HasSession`. |
-| Patient/encounter | `Patient -> HasEncounter -> Encounter` | Domain edges | Ingest/projections | Sound. |
-| Transcript | `Encounter -> ContainsChunk -> TranscriptChunk` | Domain edges | Ingest/projections | Sound and ordered, but initialization silently returns if a patient already exists instead of detecting mismatched seed state. |
-| Candidates | `Encounter -> HasCandidate -> CandidateFact -> ExtractedFrom -> TranscriptChunk` | Domain edges for DTOs; session ownership scan for verification | Ingest/proposal/verification | Provenance is sound, but verification should navigate through patient and encounter. |
-| Verification | `VerifiedFact`, candidate status, verifier fields | `SessionOwns` candidate scan | `VerificationWalker` | Only this walker promotes facts, but no persistent decision event or forward `PromotedTo` path exists. |
-| Specialized obligation | Lab/follow-up/medication/referral nodes | Generic `Materializes` edge | Verification and downstream walkers | Generic target weakens the domain model; replace clinical reads with four explicit typed relationships. |
-| Care gaps | `CareGap` nodes | Session-wide ownership scans of obligation types | `CareGapWalker` | Results are topology-derived, not fixed constants, but traversal does not demonstrate patient/encounter/verified-obligation navigation. |
-| Resolution | Gap fields, specialized node fields, task, owner, audit node | Gap edge plus ownership lookup | `GapResolutionWalker` | Audited, but related resources are found by string ID and ownership scan; task-to-obligation topology should be authoritative. |
-| Patient plan | `PatientBrief` plus embedded DTO lists and checklist strings | Ownership scan of all verified facts | `PatientPlanWalker` | Approved-only filtering works, but individual checklist items are not nodes and cannot be traversed backward. |
-| Patient answer | Fields on `PatientQuestion` | Ownership scan of verified facts | `PatientQuestionWalker` | Grounded and safe, but answer is not its own node and the blood-test matcher is over-specialized. |
-| Evidence audit | `Conflict` plus direct `Contradicts` edge | Ownership scan of all facts/candidates | `EvidenceAuditWalker` | Both statements persist, but a `Conflict` is not connected to both evidence nodes and stale patient outputs are not invalidated. |
-| Reset | `SessionOwns` ownership boundary | Session ownership traversal | `ResetDemoWalker` | Correctly scoped; retain this single use of the ownership index. |
-| Optional AI | Plain typed objects and status DTOs | No graph mutation in AI functions | AI helpers + proposal walker | Boundary is sound. Add enum typing, stronger injection validation, and explicit malformed mock mode. |
-
-## Mutable collection classification
-
-No collection below is a second persistent clinical record.
-
-| Collection | Classification | Decision |
+| Area | Baseline risk | Implemented resolution |
 |---|---|---|
-| Prepared transcript/candidate lists | Hardcoded synthetic input fixture | Keep. They seed the deterministic demonstration; they are not computed output. |
-| AI allow-list and prohibited phrase lists | Validation policy | Keep and extend for instruction injection. |
-| Walker `facts`, plan item, source-ID, trace, and visited-ID lists | Legitimate temporary walker state | Keep typed and reset per spawn. |
-| DTO lists assembled by `build_demo_state`/`build_care_graph` | Serialization projection | Keep, but derive only from domain topology. |
-| `SessionOwns` outgoing node collection | Graph ownership index | Keep only for session-scoped deletion and ownership assertions. |
-| Question `allowed_fact_ids` | Request-scoped allow-list | Keep; validate every ID through current-session topology. |
-| Candidate duplicate keys | Temporary validation lookup | Keep in-memory for one model response. |
-| `PatientBrief` embedded plan lists | Persistent output snapshot | Keep for contract compatibility, but add canonical checklist item nodes and mark stale snapshots non-current. |
+| Navigation | Some clinical operations found resources through broad `SessionOwns` scans and string IDs. | Clinical walkers traverse session → patient → encounter → evidence/obligation/task edges. `SessionOwns` remains reset-only ownership. |
+| Verification | Accepted state existed but had no append-only decision object or forward promotion path. | `VerificationEvent`, `HasVerificationEvent`, and `PromotedTo` record accepted/rejected decisions idempotently. |
+| Obligations | Generic materialization obscured lab, medication, referral, and follow-up semantics. | Four endpoint-constrained `Represents*` edges are authoritative. |
+| Gaps | Gaps were derived, but session-wide scans weakened topology evidence. | Gap walker traverses verified obligations and their task/owner/date relationships. |
+| Resolution | Resolution used related string IDs and an audit record without complete topology. | `GapResolutionEvent`, `ResolvedBy`, and `ResolutionUpdates` form an append-only path to the task. |
+| Plans | Brief checklist strings had no independently traceable node identity. | `ChecklistItem` nodes carry stable IDs and `SupportedBy` verified facts. |
+| Answers | Evidence was linked from the question itself and matching was blood-test-specific. | Separate `PatientAnswer` nodes, generalized category/term matching, and `AnsweredFrom` edges. |
+| Conflicts | Conflict did not connect both evidence roles and stale patient output remained current. | Role-bearing evidence edges preserve both sides; affected briefs/answers become non-current. |
+| Provenance | Source fields were present but no public backward traversal existed. | `TraceProvenanceWalker` and `trace_provenance` return one typed chain per support fact. |
+| Traces | No public execution trace. | Actual walker entry and followed-edge events append typed steps when trace mode is enabled. |
+| AI | Good fallback existed, but prompt injection, fabricated times, and malformed diagnostic mode needed hardening. | Strict validator, current-session allow-lists, one retry, and `mock_malformed` were added. |
+| Isolation | Synthetic session IDs were logically scoped but authorization claims were not proven. | Cross-session denials plus isolated private-walker and authenticated-root tests; demo remains explicitly anonymous. |
+
+## Canonical source-of-truth audit
+
+- Persistent graph nodes and typed relationships are the care-state authority.
+- DTO lists are projections, not independent mutable storage.
+- Stable string IDs are API compatibility identifiers; topology is the
+  authoritative membership and navigation check.
+- Transcript source text and `ExtractedFrom` provenance are immutable through
+  all public actions.
+- Candidate status changes only through `VerificationWalker`.
+- Verified facts are never LLM return values and are created only by
+  deterministic verification code.
+- `VerificationEvent` and `GapResolutionEvent` are append-only audit records.
+- Current patient briefs and answers are projections over visible, approved,
+  non-conflicted support. Superseded outputs remain historical nodes.
+- `SessionOwns` is intentionally duplicated metadata solely for bounded
+  synthetic reset; core clinical walkers do not treat it as their primary
+  graph path.
+
+## Collection and query classification
+
+| Collection/query | Classification |
+|---|---|
+| `DemoStateDTO`, `CareGraphDTO`, checklist DTO arrays | Read projection |
+| Walker `has` lists and visited-ID sets | Request-local accumulator |
+| Prepared transcript/candidate functions | Deterministic immutable seed source |
+| Model extraction return list | Untrusted typed proposal pending validation |
+| Relationship projection | Judge/frontend read view of actual graph edges |
+| `SessionOwns` neighbor set | Reset ownership index only |
+| Domain-edge neighbors | Authoritative clinical navigation |
+| `.jac/data` | Jac-managed ignored local persistence |
+
+There is no module-global clinical dictionary, second database, frontend mock
+source of truth, committed runtime cache, or real-patient collection.
 
 ## Hardcoding assessment
 
-- The Maya transcript, five candidates, expected administrative gaps, and
-  later four-week contradiction are intentional deterministic demo fixtures.
-- Gap responses are not fixed return constants; they are derived from absent
-  fields on persisted obligations. The upgrade will derive them from absent
-  relationships as well.
-- Patient plan text is deterministic formatting of graph fields, which is
-  legitimate. It must remain source-bound.
-- The current blood-test question branch checks literal `"blood"` and emits a
-  fixed noun phrase. Replace it with category-aware matching and answer
-  assembly using the stored test name, due window, and assigned task owner.
-- Spanish deterministic text is an approved fallback fixture, not an AI claim.
+Hardcoded material is limited to the stated deterministic hackathon case:
+Maya Rivera, five exact transcript chunks, five prepared pending candidates,
+two expected documentation gaps derived from missing relationships, safe
+patient wording, and the later four-week contradiction. Walkers do not use
+fixed responses to pretend traversal occurred: verification, gap detection,
+resolutions, plans, questions, provenance, and conflict audit read the graph.
 
-## Security and persistence findings
+## Security and reliability boundary
 
-- `def:pub` actions run anonymous requests on Jac's shared guest root. A
-  `session_id` is a logical demo partition, not an authorization credential.
-- Built-in private roots are supported but are not used by the main demo.
-- Jac's development server warns about bootstrap admin credentials and a test
-  JWT secret. The application must remain local and synthetic and must not be
-  represented as production-secure or HIPAA-compliant.
-- `.jac/`, databases, logs, secrets, and private/real patient paths are ignored.
-- Schema changes require cleaning or migrating ignored local graph data. This
-  repository has only deterministic synthetic runtime state, so back up and
-  rebuild it rather than pretending to provide a production data migration.
+The public demo's `session_id` is logical synthetic isolation, not an
+authorization credential. Cross-session resource IDs are rejected, and reset
+requires a synthetic session. An isolated fixture proves Jac 0.34.7 private
+walker enforcement and per-user root isolation, but authentication is not
+silently introduced into the frontend contract.
 
-## Required corrections
+No PHI, credentials, model prompts, hidden reasoning, or provider response
+bodies are stored in traces. Default runtime admin/JWT development warnings
+remain deployment blockers. This repository is not HIPAA compliant and is not
+deployed.
 
-1. Use `SessionOwns` only for ownership/reset.
-2. Add explicit relationship types for specialized obligations and output
-   provenance.
-3. Persist verification/resolution events, checklist items, and answers.
-4. Make care-gap, plan, question, audit, and provenance operations visibly
-   traverse the domain topology.
-5. Instrument trace steps at actual traversal abilities.
-6. Invalidate stale patient outputs when supporting graph state changes.
-7. Preserve every existing public request signature and response field.
+## Residual limitations
+
+- The domain contains one deterministic synthetic encounter.
+- Conflict resolution is intentionally manual.
+- Demo due dates are strings rather than scheduling objects.
+- The generated endpoint runtime may encode a missing required argument inside
+  an HTTP 200 envelope; nested error inspection is required.
+- `jac start --faux` has a verified 0.34.7 cleanup defect.
+- `jac dot` emits DOT but did not discover the tested generated-server graph
+  store; `/graph` and typed relationship projections remain available.
+- A real cloud provider is optional and was not exercised without an existing
+  authorized credential.
