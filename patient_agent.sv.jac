@@ -2,25 +2,41 @@
 
 import from models {
     BackendResponse,
+    CandidateCategory,
     PatientAnswerDTO,
     DemoSession,
+    Patient,
+    Encounter,
     VerifiedFact,
     LabOrder,
     FollowUp,
+    MedicationInstruction,
+    Referral,
     CareTask,
+    CareOwner,
     PatientQuestion,
-    SessionOwns,
-    Materializes,
-    HasTask,
-    DependsOn,
+    PatientAnswer,
+    HasPatient,
+    HasEncounter,
+    HasVerifiedFact,
+    RepresentsLabOrder,
+    RepresentsFollowUp,
+    RepresentsMedication,
+    RepresentsReferral,
+    HasLabTask,
+    AssignedTo,
     HasQuestion,
+    HasAnswer,
     AnsweredFrom,
+    answer_to_dto,
 }
 import from extraction { deterministic_timestamp }
 import from walkers {
+    TraceableWalker,
     failure_response,
     success_response,
     find_session,
+    session_patient,
     own_node,
     fact_is_conflicted,
 }
@@ -30,7 +46,36 @@ glob SAFE_FALLBACK: str = (
          "Please contact your clinic."
      );
 
-walker PatientQuestionWalker {
+def question_matches_category(question: str, category: CandidateCategory) -> bool {
+    normalized: str = question.lower();
+    if category == CandidateCategory.LAB_ORDER {
+        return ("lab" in normalized or "blood" in normalized or "test" in normalized);
+    }
+    if category == CandidateCategory.FOLLOW_UP {
+        return (
+            "follow" in normalized
+            or "return" in normalized
+            or "appointment" in normalized
+            or "review" in normalized
+        );
+    }
+    if category == CandidateCategory.MEDICATION_INSTRUCTION {
+        return "medication" in normalized or "prescription" in normalized;
+    }
+    if category == CandidateCategory.REFERRAL {
+        return (
+            "referral" in normalized
+            or "nutrition" in normalized
+            or "counselor" in normalized
+        );
+    }
+    if category == CandidateCategory.LANGUAGE_PREFERENCE {
+        return "language" in normalized or "spanish" in normalized;
+    }
+    return False;
+}
+
+walker PatientQuestionWalker(TraceableWalker) {
     has session_id: str = "demo-default",
         question: str = "",
         restrict_to_fact_ids: bool = False,
@@ -64,8 +109,43 @@ walker PatientQuestionWalker {
         visit session;
     }
 
-    can scan with DemoSession entry {
-        visit [here->:SessionOwns:->[?:VerifiedFact]];
+    can enter_session with DemoSession entry {
+        self.trace(
+            "PatientQuestionWalker",
+            here.id,
+            "DemoSession",
+            "HasSession",
+            "follow patient",
+            "queued",
+            "Entered only the selected synthetic session."
+        );
+        visit [here->:HasPatient:->];
+    }
+
+    can enter_patient with Patient entry {
+        self.trace(
+            "PatientQuestionWalker",
+            here.id,
+            "Patient",
+            "HasPatient",
+            "follow encounter",
+            "queued",
+            "Located the selected patient's approved encounter."
+        );
+        visit [here->:HasEncounter:->];
+    }
+
+    can enter_encounter with Encounter entry {
+        self.trace(
+            "PatientQuestionWalker",
+            here.id,
+            "Encounter",
+            "HasEncounter",
+            "follow approved facts",
+            "queued",
+            "Queued only facts connected through HasVerifiedFact."
+        );
+        visit [here->:HasVerifiedFact:->];
     }
 
     can answer_from_fact with VerifiedFact entry {
@@ -73,53 +153,80 @@ walker PatientQuestionWalker {
             skip;
         }
         session: DemoSession | None = find_session(self.session_id);
-        if (
-            session is None
-            or not here.visible_to_patient
-            or fact_is_conflicted(session, here.id)
-            or (self.restrict_to_fact_ids and here.id not in self.allowed_fact_ids)
-        ) {
+        allowed: bool = (
+            session is not None
+            and here.session_id == self.session_id
+            and here.visible_to_patient
+            and not fact_is_conflicted(session as DemoSession, here.id)
+            and (not self.restrict_to_fact_ids or here.id in self.allowed_fact_ids)
+            and question_matches_category(self.question, here.category)
+        );
+        self.trace(
+            "PatientQuestionWalker",
+            here.id,
+            "VerifiedFact",
+            "HasVerifiedFact",
+            "apply approved evidence filter",
+            "eligible" if allowed else "excluded",
+            "Used only current-session, verified, visible, non-conflicting evidence."
+        );
+        if not allowed {
             skip;
         }
-
-        normalized: str = self.question.lower();
-        if (
-            here.category == "lab_order"
-            and "blood" in normalized
-            and ("when" in normalized or "test" in normalized)
-        ) {
-            labs: list[LabOrder] = [here->:Materializes:->[?:LabOrder]];
-            tasks: list[CareTask] = [here<-:DependsOn:<-];
-            resolved_tasks: list[CareTask] = [
-                task
-                for task in tasks
-                if task.status == "resolved" and task.owner.strip()
-            ];
-            if labs and resolved_tasks and labs[0].due_window.strip() {
-                self.answer = (
-                    f"Your blood test is due {labs[0].due_window} and is "
-                    f"assigned to {resolved_tasks[0].owner}."
-                );
-                self.grounded = True;
-                self.source_fact_ids = [here.id];
+        if here.category == CandidateCategory.LAB_ORDER {
+            labs: list[LabOrder] = [here->:RepresentsLabOrder:->];
+            if labs {
+                tasks: list[CareTask] = [labs[0]->:HasLabTask:->];
+                owners: list[CareOwner] = [tasks[0]->:AssignedTo:->] if tasks else [];
+                if (
+                    tasks
+                    and tasks[0].status == "resolved"
+                    and labs[0].due_window.strip()
+                    and owners
+                ) {
+                    self.answer = (
+                        f"Your {labs[0].test_name} is due "
+                        f"{labs[0].due_window} and is assigned to "
+                        f"{owners[0].display_name}."
+                    );
+                }
             }
-        } elif (
-            here.category == "follow_up"
-            and (
-                "follow" in normalized
-                or "return" in normalized
-                or "appointment" in normalized
-            )
-        ) {
-            follow_ups: list[FollowUp] = [here->:Materializes:->[?:FollowUp]];
+        } elif here.category == CandidateCategory.FOLLOW_UP {
+            follow_ups: list[FollowUp] = [here->:RepresentsFollowUp:->];
             if follow_ups and follow_ups[0].appointment_date.strip() {
                 self.answer = (
                     "Your follow-up is scheduled for "
                     f"{follow_ups[0].appointment_date}."
                 );
-                self.grounded = True;
-                self.source_fact_ids = [here.id];
             }
+        } elif here.category == CandidateCategory.MEDICATION_INSTRUCTION {
+            medications: list[MedicationInstruction] = [here->:RepresentsMedication:->];
+            if medications and medications[0].instruction_text.strip() {
+                self.answer = medications[0].instruction_text;
+            }
+        } elif here.category == CandidateCategory.REFERRAL {
+            referrals: list[Referral] = [here->:RepresentsReferral:->];
+            if referrals and referrals[0].destination.strip() {
+                self.answer = (
+                    "Your approved referral is to " f"{referrals[0].destination}."
+                );
+            }
+        } elif here.category == CandidateCategory.LANGUAGE_PREFERENCE {
+            self.answer = f"Your approved language preference is {here.value}.";
+        }
+
+        if self.answer.strip() {
+            self.grounded = True;
+            self.source_fact_ids = [here.id];
+            self.trace(
+                "PatientQuestionWalker",
+                here.id,
+                "VerifiedFact",
+                "Represents*",
+                "assemble deterministic answer",
+                "grounded",
+                "Assembled the answer only from stored graph fields."
+            );
         }
     }
 
@@ -128,6 +235,18 @@ walker PatientQuestionWalker {
         if fallback_used {
             self.answer = SAFE_FALLBACK;
             self.source_fact_ids = [];
+        }
+        patient: Patient | None = session_patient(here);
+        if patient is None {
+            response = failure_response(
+                "PATIENT_NOT_FOUND",
+                "The synthetic patient is missing.",
+                False,
+                here.graph_version
+            );
+            response.traversal_trace = self.traversal_trace;
+            report response;
+            disengage;
         }
 
         here.graph_version += 1;
@@ -139,14 +258,37 @@ walker PatientQuestionWalker {
             grounded=self.grounded,
             source_fact_ids=self.source_fact_ids,
             fallback_used=fallback_used,
+            current=True,
+            created_at=deterministic_timestamp(here.graph_version)
+        );
+        answer_node = PatientAnswer(
+            session_id=here.id,
+            id=f"answer-{here.id}-{here.graph_version}",
+            answer=self.answer,
+            grounded=self.grounded,
+            source_fact_ids=self.source_fact_ids,
+            fallback_used=fallback_used,
+            ai_matching_used=self.ai_matching_used,
+            current=True,
             created_at=deterministic_timestamp(here.graph_version)
         );
         own_node(here, question_node);
-        here +>:HasQuestion():+> question_node;
+        own_node(here, answer_node);
+        (patient as Patient) +>:HasQuestion():+> question_node;
+        question_node +>:HasAnswer():+> answer_node;
         for fact_id in self.source_fact_ids {
-            facts: list[VerifiedFact] = [here->:SessionOwns:->[?:VerifiedFact, id==fact_id]];
+            encounter: Encounter | None = (
+                [(patient as Patient)->:HasEncounter:->][0]
+                    if [(patient as Patient)->:HasEncounter:->]
+                    else None
+            );
+            facts: list[VerifiedFact] = (
+                [(encounter as Encounter)->:HasVerifiedFact:->[?:VerifiedFact, id==fact_id]]
+                    if encounter is not None
+                    else []
+            );
             if facts {
-                question_node +>:AnsweredFrom():+> facts[0];
+                answer_node +>:AnsweredFrom():+> facts[0];
             }
         }
 
@@ -158,13 +300,9 @@ walker PatientQuestionWalker {
                     else "No approved graph evidence answered the question."
             )
         );
-        response.patient_answer = PatientAnswerDTO(
-            answer=self.answer,
-            grounded=self.grounded,
-            source_fact_ids=self.source_fact_ids,
-            fallback_used=fallback_used,
-            ai_matching_used=self.ai_matching_used
-        );
+        response.patient_answer = answer_to_dto(answer_node);
+        response.created_graph_ids = [question_node.id, answer_node.id];
+        response.traversal_trace = self.traversal_trace;
         report response;
     }
 }

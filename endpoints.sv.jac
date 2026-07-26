@@ -8,7 +8,6 @@ import from models {
     PatientPlanDTO,
     VerifiedFact,
     VerifiedFactReference,
-    SessionOwns,
 }
 import from walkers {
     AIConsultationIngestWalker,
@@ -19,10 +18,13 @@ import from walkers {
     GapResolutionWalker,
     PatientPlanWalker,
     EvidenceAuditWalker,
+    TraceProvenanceWalker,
     ResetDemoWalker,
     failure_response,
     find_session,
     fact_is_conflicted,
+    candidates_for_session,
+    verified_facts_for_session,
     build_demo_state,
     build_care_graph,
 }
@@ -49,7 +51,16 @@ def first_response(reports: list[BackendResponse], operation: str) -> BackendRes
 }
 
 def valid_ai_mode(mode: str) -> bool {
-    return mode.lower().strip() in ["disabled", "live", "mock"];
+    return mode.lower().strip() in [
+        "disabled",
+        "live",
+        "mock",
+        "mock_malformed",
+        "test-no-key",
+        "test-api-error",
+        "test-timeout",
+        "test-empty"
+    ];
 }
 
 def mark_recoverable_ai_fallback(
@@ -67,7 +78,10 @@ def:pub load_demo_encounter(
 ) -> BackendResponse {
     if not valid_ai_mode(ai_mode) {
         return failure_response(
-            "AI_MODE_INVALID", "ai_mode must be 'disabled', 'live', or 'mock'.", True, 0
+            "AI_MODE_INVALID",
+            "ai_mode must be disabled, live, mock, or mock_malformed.",
+            True,
+            0
         );
     }
     if ai_mode.lower().strip() == "disabled" {
@@ -75,10 +89,32 @@ def:pub load_demo_encounter(
         return first_response(result.reports, "load_demo_encounter");
     }
 
-    transcript_result = root spawn AIConsultationIngestWalker(session_id=session_id);
-    transcript_response: BackendResponse = first_response(
-        transcript_result.reports, "load_demo_encounter.transcript"
-    );
+    existing_session: DemoSession | None = find_session(session_id);
+    transcript_response: BackendResponse;
+    if existing_session is not None {
+        existing_state = build_demo_state(existing_session as DemoSession);
+        if existing_state.verified_facts {
+            return failure_response(
+                "AI_SESSION_ALREADY_INITIALIZED",
+                "Reset the synthetic session before running optional AI extraction.",
+                True,
+                existing_session.graph_version
+            );
+        }
+        transcript_response = BackendResponse(
+            success=True,
+            message="Existing reset transcript selected for optional extraction.",
+            current_graph_version=existing_session.graph_version,
+            demo_state=existing_state
+        );
+    } else {
+        transcript_result = root spawn AIConsultationIngestWalker(
+            session_id=session_id
+        );
+        transcript_response = first_response(
+            transcript_result.reports, "load_demo_encounter.transcript"
+        );
+    }
     if not transcript_response.success or transcript_response.demo_state is None {
         return transcript_response;
     }
@@ -177,7 +213,10 @@ def:pub generate_patient_plan(
 ) -> BackendResponse {
     if not valid_ai_mode(ai_mode) {
         return failure_response(
-            "AI_MODE_INVALID", "ai_mode must be 'disabled', 'live', or 'mock'.", True, 0
+            "AI_MODE_INVALID",
+            "ai_mode must be disabled, live, mock, or mock_malformed.",
+            True,
+            0
         );
     }
     if ai_mode.lower().strip() == "disabled" {
@@ -227,7 +266,7 @@ def:pub simplify_patient_plan(
     if not valid_ai_mode(ai_mode) or ai_mode.lower().strip() == "disabled" {
         return failure_response(
             "AI_MODE_INVALID",
-            "simplify_patient_plan requires ai_mode 'live' or 'mock'.",
+            "simplify_patient_plan requires live, mock, or mock_malformed mode.",
             True,
             0
         );
@@ -259,7 +298,10 @@ def:pub ask_patient_question(
 ) -> BackendResponse {
     if not valid_ai_mode(ai_mode) {
         return failure_response(
-            "AI_MODE_INVALID", "ai_mode must be 'disabled', 'live', or 'mock'.", True, 0
+            "AI_MODE_INVALID",
+            "ai_mode must be disabled, live, mock, or mock_malformed.",
+            True,
+            0
         );
     }
     if ai_mode.lower().strip() == "disabled" {
@@ -281,7 +323,7 @@ def:pub ask_patient_question(
     active_session: DemoSession = session as DemoSession;
     references: list[VerifiedFactReference] = [
         VerifiedFactReference(id=fact.id, category=fact.category, value=fact.value)
-        for fact in [active_session->:SessionOwns:->[?:VerifiedFact]]
+        for fact in verified_facts_for_session(active_session)
         if (fact.visible_to_patient and not fact_is_conflicted(active_session, fact.id))
     ];
     match_attempt: QuestionMatchAttempt = run_question_match(
@@ -309,6 +351,15 @@ def:pub run_evidence_audit(session_id: str = "demo-default") -> BackendResponse 
     return first_response(result.reports, "run_evidence_audit");
 }
 
+def:pub trace_provenance(
+    output_id: str, session_id: str = "demo-default"
+) -> BackendResponse {
+    result = root spawn TraceProvenanceWalker(
+        session_id=session_id, output_id=output_id
+    );
+    return first_response(result.reports, "trace_provenance");
+}
+
 def:pub reset_demo(session_id: str = "demo-default") -> BackendResponse {
     result = root spawn ResetDemoWalker(session_id=session_id);
     return first_response(result.reports, "reset_demo");
@@ -324,7 +375,11 @@ def:pub add_demo_contradiction(session_id: str = "demo-default") -> BackendRespo
             0
         );
     }
-    base_follow_up: list[VerifiedFact] = [session->:SessionOwns:->[?:VerifiedFact, id=="verified-candidate-follow-up"]];
+    base_follow_up: list[VerifiedFact] = [
+        fact
+        for fact in verified_facts_for_session(session as DemoSession)
+        if fact.id == "verified-candidate-follow-up"
+    ];
     if not base_follow_up {
         return failure_response(
             "BASE_FOLLOW_UP_NOT_VERIFIED",
@@ -333,7 +388,11 @@ def:pub add_demo_contradiction(session_id: str = "demo-default") -> BackendRespo
             session.graph_version
         );
     }
-    existing: list[CandidateFact] = [session->:SessionOwns:->[?:CandidateFact, id=="candidate-follow-up-4-weeks"]];
+    existing: list[CandidateFact] = [
+        candidate
+        for candidate in candidates_for_session(session as DemoSession)
+        if candidate.id == "candidate-follow-up-4-weeks"
+    ];
     if existing {
         return failure_response(
             "CONTRADICTION_ALREADY_ADDED",

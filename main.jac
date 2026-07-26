@@ -12,6 +12,9 @@ import from models {
     DemoStateDTO,
     CareGraphDTO,
     ConflictDTO,
+    TraversalStepDTO,
+    ProvenanceChainDTO,
+    GraphRelationshipDTO,
 }
 import from endpoints {
     load_demo_encounter,
@@ -24,6 +27,7 @@ import from endpoints {
     simplify_patient_plan,
     ask_patient_question,
     run_evidence_audit,
+    trace_provenance,
     reset_demo,
     add_demo_contradiction,
 }

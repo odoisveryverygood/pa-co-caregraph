@@ -1,5 +1,53 @@
 """Typed DTOs and persistent graph schema for Pa-Co CareGraph."""
 
+enum CandidateCategory: str {
+    LAB_ORDER = "lab_order",
+    FOLLOW_UP = "follow_up",
+    MEDICATION_INSTRUCTION = "medication_instruction",
+    REFERRAL = "referral",
+    LANGUAGE_PREFERENCE = "language_preference"
+}
+
+sem CandidateCategory.LAB_ORDER = "An explicitly stated laboratory order or laboratory completion instruction.";
+sem CandidateCategory.FOLLOW_UP = "An explicitly stated return, review, or follow-up instruction.";
+sem CandidateCategory.MEDICATION_INSTRUCTION = "An explicitly stated instruction about an existing prescription; never a new medication or dosage.";
+sem CandidateCategory.REFERRAL = "An explicitly stated referral destination or referral obligation.";
+sem CandidateCategory.LANGUAGE_PREFERENCE = "An explicitly stated request or preference for a communication language.";
+
+enum CandidateStatus: str {
+    PENDING = "pending",
+    ACCEPTED = "accepted",
+    REJECTED = "rejected"
+}
+
+sem CandidateStatus.PENDING = "Unverified and prohibited from patient-facing output.";
+sem CandidateStatus.ACCEPTED = "Explicitly accepted by a clinician through VerificationWalker.";
+sem CandidateStatus.REJECTED = "Explicitly rejected; it must have no path to a VerifiedFact.";
+
+enum GapType: str {
+    LAB_OWNER_MISSING = "lab_owner_missing",
+    FOLLOW_UP_DATE_MISSING = "follow_up_date_missing",
+    REFERRAL_OWNER_MISSING = "referral_owner_missing",
+    MEDICATION_DOCUMENTATION_MISSING = "medication_documentation_missing",
+    TASK_OWNER_MISSING = "task_owner_missing"
+}
+
+enum GapStatus: str { OPEN = "open", RESOLVED = "resolved" }
+
+enum ConflictType: str {
+    CONTRADICTORY_FOLLOW_UP_PERIOD = "contradictory_follow_up_period",
+    DUPLICATE_VERIFIED_FACT = "duplicate_verified_fact",
+    UNVERIFIED_ATTEMPTED_CHANGE = "unverified_attempted_change",
+    SUPERSEDED_INSTRUCTION = "superseded_instruction"
+}
+
+enum Language: str { ENGLISH = "English", SPANISH = "Spanish" }
+
+enum VerificationDecision: str { ACCEPT = "accept", REJECT = "reject" }
+
+sem VerificationDecision.ACCEPT = "A clinician decision that may promote one pending candidate through VerificationWalker.";
+sem VerificationDecision.REJECT = "A clinician decision that records rejection without creating a verified path.";
+
 obj ExtractedCandidate {
     has category: str = "",
         value: str = "",
@@ -89,7 +137,8 @@ obj CareGapDTO {
 }
 
 obj PlanItemDTO {
-    has kind: str = "",
+    has id: str = "",
+        kind: str = "",
         text: str = "",
         owner: str = "",
         due_date: str = "",
@@ -113,7 +162,8 @@ obj PatientPlanDTO {
 }
 
 obj PatientAnswerDTO {
-    has answer: str = "",
+    has id: str = "",
+        answer: str = "",
         grounded: bool = False,
         source_fact_ids: list[str] = [],
         fallback_used: bool = False,
@@ -151,6 +201,36 @@ obj ConflictDTO {
         right_source_text: str = "";
 }
 
+obj TraversalStepDTO {
+    has order: int = 0,
+        walker_name: str = "",
+        current_node_id: str = "",
+        current_node_type: str = "",
+        edge_type: str = "",
+        action: str = "",
+        outcome: str = "",
+        human_explanation: str = "";
+}
+
+obj ProvenanceChainDTO {
+    has output_id: str = "",
+        output_type: str = "",
+        source_fact_id: str = "",
+        candidate_fact_id: str = "",
+        transcript_chunk_id: str = "",
+        encounter_id: str = "",
+        patient_id: str = "",
+        source_text: str = "",
+        complete: bool = False;
+}
+
+obj GraphRelationshipDTO {
+    has from_id: str = "",
+        edge_type: str = "",
+        to_id: str = "",
+        role: str = "";
+}
+
 obj CareGraphDTO {
     has patient: PatientDTO | None = None,
         encounter: EncounterDTO | None = None,
@@ -160,6 +240,7 @@ obj CareGraphDTO {
         care_gaps: list[CareGapDTO] = [],
         patient_plan: PatientPlanDTO | None = None,
         conflicts: list[ConflictDTO] = [],
+        relationships: list[GraphRelationshipDTO] = [],
         graph_version: int = 0;
 }
 
@@ -190,7 +271,10 @@ obj BackendResponse {
         care_gaps: list[CareGapDTO] = [],
         patient_plan: PatientPlanDTO | None = None,
         patient_answer: PatientAnswerDTO | None = None,
-        conflicts: list[ConflictDTO] = [];
+        conflicts: list[ConflictDTO] = [],
+        created_graph_ids: list[str] = [],
+        traversal_trace: list[TraversalStepDTO] = [],
+        provenance_chains: list[ProvenanceChainDTO] = [];
 }
 
 node CareNode {
@@ -200,8 +284,11 @@ node CareNode {
 node DemoSession {
     has id: str = "",
         synthetic: bool = True,
+        schema_version: int = 2,
         graph_version: int = 1;
 }
+
+sem DemoSession = "A strictly synthetic, isolated demonstration graph. Reset may operate only when synthetic is true.";
 
 node Patient(CareNode) {
     has id: str = "",
@@ -210,11 +297,15 @@ node Patient(CareNode) {
         synthetic: bool = True;
 }
 
+sem Patient = "A synthetic demonstration patient identity. Real patient data is prohibited in this application.";
+
 node Encounter(CareNode) {
     has id: str = "",
         occurred_at: str = "",
         status: str = "";
 }
+
+sem Encounter = "One synthetic consultation containing immutable transcript evidence and its verification workflow.";
 
 node TranscriptChunk(CareNode) {
     has id: str = "",
@@ -223,19 +314,25 @@ node TranscriptChunk(CareNode) {
         text: str = "";
 }
 
+sem TranscriptChunk = "Immutable source evidence from the prepared synthetic consultation.";
+
 node CandidateFact(CareNode) {
     has id: str = "",
-        category: str = "",
+        category: CandidateCategory = CandidateCategory.LAB_ORDER,
         value: str = "",
         confidence: float = 0.0,
-        status: str = "pending",
+        status: CandidateStatus = CandidateStatus.PENDING,
         source_chunk_id: str = "",
         created_at: str = "";
 }
 
+sem CandidateFact = "An unverified proposition extracted from a consultation. It must never appear in an approved patient plan until a clinician explicitly accepts it.";
+sem CandidateFact.value = "A normalized proposition supported by the exact connected transcript chunk; it is not clinical advice.";
+sem CandidateFact.confidence = "Extraction confidence only, never medical certainty.";
+
 node VerifiedFact(CareNode) {
     has id: str = "",
-        category: str = "",
+        category: CandidateCategory = CandidateCategory.LAB_ORDER,
         value: str = "",
         verified_by: str = "",
         verified_at: str = "",
@@ -244,9 +341,22 @@ node VerifiedFact(CareNode) {
         source_text: str = "";
 }
 
+sem VerifiedFact = "A clinician-approved fact with an immutable provenance path to the original consultation evidence.";
+sem VerifiedFact.visible_to_patient = "Explicit patient-visibility flag. It never overrides conflicts or provenance requirements.";
+
 node ClinicianIdentity(CareNode) {
     has id: str = "";
 }
+
+node VerificationEvent(CareNode) {
+    has id: str = "",
+        candidate_id: str = "",
+        decision: VerificationDecision = VerificationDecision.REJECT,
+        clinician_id: str = "",
+        decided_at: str = "";
+}
+
+sem VerificationEvent = "An append-only record of one clinician accept or reject decision. An LLM cannot create it.";
 
 node MedicationInstruction(CareNode) {
     has id: str = "",
@@ -298,7 +408,8 @@ node CareTask(CareNode) {
 
 node CareGap(CareNode) {
     has id: str = "",
-        gap_type: str = "",
+        gap_type: GapType = GapType.LAB_OWNER_MISSING,
+        status: GapStatus = GapStatus.OPEN,
         message: str = "",
         related_fact_ids: list[str] = [],
         resolved: bool = False,
@@ -307,7 +418,9 @@ node CareGap(CareNode) {
         due_date: str = "";
 }
 
-node GapResolutionAudit(CareNode) {
+sem CareGap = "An incomplete administrative care obligation such as a missing owner or date. It is not a diagnosis or treatment recommendation.";
+
+node GapResolutionEvent(CareNode) {
     has id: str = "",
         gap_id: str = "",
         resolution: str = "",
@@ -316,16 +429,20 @@ node GapResolutionAudit(CareNode) {
         recorded_at: str = "";
 }
 
+sem GapResolutionEvent = "An append-only record connecting a resolved administrative gap to its responsible owner, date, and task.";
+
 node Conflict(CareNode) {
     has id: str = "",
         left_fact_id: str = "",
         right_fact_id: str = "",
-        conflict_type: str = "",
+        conflict_type: ConflictType = ConflictType.CONTRADICTORY_FOLLOW_UP_PERIOD,
         explanation: str = "",
         resolved: bool = False,
         left_source_text: str = "",
         right_source_text: str = "";
 }
+
+sem Conflict = "A preserved disagreement or duplicate between evidence records. It never selects a medically correct statement.";
 
 node PatientBrief(CareNode) {
     has id: str = "",
@@ -338,8 +455,22 @@ node PatientBrief(CareNode) {
         checklist: list[str] = [],
         source_fact_ids: list[str] = [],
         approved_only: bool = True,
+        current: bool = True,
         created_at: str = "";
 }
+
+sem PatientBrief = "A patient-facing snapshot generated only from approved, visible, non-conflicting graph facts.";
+
+node ChecklistItem(CareNode) {
+    has id: str = "",
+        kind: str = "",
+        text: str = "",
+        order: int = 0,
+        source_fact_id: str = "",
+        current: bool = True;
+}
+
+sem ChecklistItem = "One patient-facing checklist statement with a traversable supporting VerifiedFact.";
 
 node PatientQuestion(CareNode) {
     has id: str = "",
@@ -348,33 +479,76 @@ node PatientQuestion(CareNode) {
         grounded: bool = False,
         source_fact_ids: list[str] = [],
         fallback_used: bool = False,
+        current: bool = True,
         created_at: str = "";
 }
 
+sem PatientQuestion = "A patient request that may be answered only from clinician-approved, patient-visible graph nodes.";
+
+node PatientAnswer(CareNode) {
+    has id: str = "",
+        answer: str = "",
+        grounded: bool = False,
+        source_fact_ids: list[str] = [],
+        fallback_used: bool = False,
+        ai_matching_used: bool = False,
+        current: bool = True,
+        created_at: str = "";
+}
+
+sem PatientAnswer = "A deterministic answer assembled only from connected approved graph facts, or the exact safe fallback.";
+
+edge HasSession {}
 edge SessionOwns: DemoSession --> CareNode {}
 edge HasPatient: DemoSession --> Patient {}
 edge HasEncounter: Patient --> Encounter {}
 edge ContainsChunk: Encounter --> TranscriptChunk {}
 edge HasCandidate: Encounter --> CandidateFact {}
 edge ExtractedFrom: CandidateFact --> TranscriptChunk {}
+edge PromotedTo: CandidateFact --> VerifiedFact {}
 edge HasVerifiedFact: Encounter --> VerifiedFact {}
 edge VerifiedFrom: VerifiedFact --> CandidateFact {}
 edge VerifiedBy: VerifiedFact --> ClinicianIdentity {}
 edge HasClinician: DemoSession --> ClinicianIdentity {}
-edge Materializes: VerifiedFact --> CareNode {}
+edge HasVerificationEvent: CandidateFact --> VerificationEvent {}
+edge RejectedFrom: VerificationEvent --> CandidateFact {}
+edge DecisionBy: VerificationEvent --> ClinicianIdentity {}
+edge RepresentsMedication: VerifiedFact --> MedicationInstruction {}
+edge RepresentsLabOrder: VerifiedFact --> LabOrder {}
+edge RepresentsReferral: VerifiedFact --> Referral {}
+edge RepresentsFollowUp: VerifiedFact --> FollowUp {}
 edge RequiresFollowUp: LabOrder --> FollowUp {}
-edge HasGap: DemoSession --> CareGap {}
-edge HasTask: DemoSession --> CareTask {}
+edge HasTask: Encounter --> CareTask {}
+edge HasLabTask: LabOrder --> CareTask {}
+edge HasFollowUpTask: FollowUp --> CareTask {}
+edge HasReferralTask: Referral --> CareTask {}
+edge HasMedicationTask: MedicationInstruction --> CareTask {}
+edge HasOwner: Encounter --> CareOwner {}
 edge AssignedTo: CareTask --> CareOwner {}
 edge DependsOn: CareTask --> VerifiedFact {}
-edge HasAudit: CareGap --> GapResolutionAudit {}
+edge HasGap: Encounter --> CareGap {}
+edge GapForFact: CareGap --> VerifiedFact {}
+edge ResolvedBy: CareGap --> GapResolutionEvent {}
+edge ResolutionUpdates: GapResolutionEvent --> CareTask {}
 edge Supersedes: VerifiedFact --> VerifiedFact {}
 edge Contradicts: VerifiedFact --> VerifiedFact {}
-edge HasConflict: DemoSession --> Conflict {}
+edge HasConflict: Encounter --> Conflict {}
+edge ConflictEvidence: Conflict --> VerifiedFact {
+    has role: str = "";
+}
+
+edge CandidateConflictEvidence: Conflict --> CandidateFact {
+    has role: str = "";
+}
+
 edge HasBrief: Patient --> PatientBrief {}
+edge GeneratedFrom: PatientBrief --> Encounter {}
+edge HasChecklistItem: PatientBrief --> ChecklistItem {}
+edge SupportedBy: ChecklistItem --> VerifiedFact {}
 edge VisibleToPatient: VerifiedFact --> PatientBrief {}
-edge HasQuestion: DemoSession --> PatientQuestion {}
-edge AnsweredFrom: PatientQuestion --> VerifiedFact {}
+edge HasQuestion: Patient --> PatientQuestion {}
+edge HasAnswer: PatientQuestion --> PatientAnswer {}
+edge AnsweredFrom: PatientAnswer --> VerifiedFact {}
 
 def candidate_to_dto(candidate: CandidateFact) -> CandidateFactDTO {
     source_text: str = "";
@@ -465,5 +639,16 @@ def brief_to_plan(brief: PatientBrief) -> PatientPlanDTO {
         checklist=brief.checklist,
         source_fact_ids=brief.source_fact_ids,
         generated_at=brief.created_at
+    );
+}
+
+def answer_to_dto(answer: PatientAnswer) -> PatientAnswerDTO {
+    return PatientAnswerDTO(
+        id=answer.id,
+        answer=answer.answer,
+        grounded=answer.grounded,
+        source_fact_ids=answer.source_fact_ids,
+        fallback_used=answer.fallback_used,
+        ai_matching_used=answer.ai_matching_used
     );
 }

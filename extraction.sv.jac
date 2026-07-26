@@ -1,5 +1,7 @@
 """Deterministic P0 consultation data with no model-provider dependency."""
 
+import from models { CandidateCategory }
+
 obj SeedTranscriptChunk {
     has id: str = "",
         sequence: int = 0,
@@ -9,7 +11,7 @@ obj SeedTranscriptChunk {
 
 obj SeedCandidateFact {
     has id: str = "",
-        category: str = "",
+        category: CandidateCategory = CandidateCategory.LAB_ORDER,
         value: str = "",
         confidence: float = 1.0,
         source_chunk_id: str = "",
@@ -62,7 +64,7 @@ def prepared_candidates -> list[SeedCandidateFact] {
     return [
         SeedCandidateFact(
             id="candidate-lab",
-            category="lab_order",
+            category=CandidateCategory.LAB_ORDER,
             value="blood test; due this week",
             confidence=1.0,
             source_chunk_id="chunk-1",
@@ -70,7 +72,7 @@ def prepared_candidates -> list[SeedCandidateFact] {
         ),
         SeedCandidateFact(
             id="candidate-follow-up",
-            category="follow_up",
+            category=CandidateCategory.FOLLOW_UP,
             value="return in two weeks",
             confidence=1.0,
             source_chunk_id="chunk-2",
@@ -78,7 +80,7 @@ def prepared_candidates -> list[SeedCandidateFact] {
         ),
         SeedCandidateFact(
             id="candidate-medication",
-            category="medication_instruction",
+            category=CandidateCategory.MEDICATION_INSTRUCTION,
             value="continue existing prescription unchanged",
             confidence=1.0,
             source_chunk_id="chunk-3",
@@ -86,7 +88,7 @@ def prepared_candidates -> list[SeedCandidateFact] {
         ),
         SeedCandidateFact(
             id="candidate-referral",
-            category="referral",
+            category=CandidateCategory.REFERRAL,
             value="community nutrition counselor",
             confidence=1.0,
             source_chunk_id="chunk-4",
@@ -94,7 +96,7 @@ def prepared_candidates -> list[SeedCandidateFact] {
         ),
         SeedCandidateFact(
             id="candidate-language",
-            category="language_preference",
+            category=CandidateCategory.LANGUAGE_PREFERENCE,
             value="Spanish",
             confidence=1.0,
             source_chunk_id="chunk-5",
@@ -115,7 +117,7 @@ def prepared_contradiction_chunk -> SeedTranscriptChunk {
 def prepared_contradiction_candidate -> SeedCandidateFact {
     return SeedCandidateFact(
         id="candidate-follow-up-4-weeks",
-        category="follow_up",
+        category=CandidateCategory.FOLLOW_UP,
         value="return in four weeks",
         confidence=1.0,
         source_chunk_id="chunk-6",

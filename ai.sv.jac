@@ -4,6 +4,7 @@ import os;
 import from jaclang.byllm.lib { MockLLM, OutputConversionError, }
 import from models {
     AIStatusDTO,
+    CandidateCategory,
     ExtractedCandidate,
     PatientPlanDTO,
     PlanItemDTO,
@@ -13,12 +14,12 @@ import from models {
 }
 import from extraction { prepared_candidates, prepared_transcript, }
 
-glob ALLOWED_CATEGORIES: list[str] = [
-         "lab_order",
-         "follow_up",
-         "medication_instruction",
-         "referral",
-         "language_preference",
+glob ALLOWED_CATEGORIES: list[CandidateCategory] = [
+         CandidateCategory.LAB_ORDER,
+         CandidateCategory.FOLLOW_UP,
+         CandidateCategory.MEDICATION_INSTRUCTION,
+         CandidateCategory.REFERRAL,
+         CandidateCategory.LANGUAGE_PREFERENCE,
 
      ],
      BLOCKED_MEDICAL_PHRASES: list[str] = [
@@ -34,10 +35,35 @@ glob ALLOWED_CATEGORIES: list[str] = [
          "call 911",
          "emergency triage",
 
+     ],
+     BLOCKED_INJECTION_PHRASES: list[str] = [
+         "approve automatically",
+         "return a verified node",
+         "create a verified fact",
+         "ignore previous instructions",
+         "reveal another patient",
+         "resolve the contradiction",
+
+     ],
+     PROTECTED_TIME_TOKENS: list[str] = [
+         "today",
+         "tomorrow",
+         "week",
+         "weeks",
+         "month",
+         "months",
+         "monday",
+         "tuesday",
+         "wednesday",
+         "thursday",
+         "friday",
+         "saturday",
+         "sunday",
+
      ];
 
 obj LLMExtractedCandidate {
-    has category: str = "",
+    has category: CandidateCategory = CandidateCategory.LAB_ORDER,
         value: str = "",
         source_text: str = "",
         source_chunk_id: str = "",
@@ -123,7 +149,7 @@ def match_question_to_verified_facts(
 
 glob MOCK_LLM_EXTRACTED_CANDIDATES: list[LLMExtractedCandidate] = [
          LLMExtractedCandidate(
-             category="lab_order",
+             category=CandidateCategory.LAB_ORDER,
              value="blood test; due this week",
              source_text="We will order a blood test to be completed this week.",
              source_chunk_id="chunk-1",
@@ -131,7 +157,7 @@ glob MOCK_LLM_EXTRACTED_CANDIDATES: list[LLMExtractedCandidate] = [
              patient_visible_candidate=True
          ),
          LLMExtractedCandidate(
-             category="follow_up",
+             category=CandidateCategory.FOLLOW_UP,
              value="return in two weeks",
              source_text="Please return in two weeks so we can review the results.",
              source_chunk_id="chunk-2",
@@ -139,7 +165,7 @@ glob MOCK_LLM_EXTRACTED_CANDIDATES: list[LLMExtractedCandidate] = [
              patient_visible_candidate=True
          ),
          LLMExtractedCandidate(
-             category="medication_instruction",
+             category=CandidateCategory.MEDICATION_INSTRUCTION,
              value="continue existing prescription unchanged",
              source_text=(
                  "Continue your current medication exactly as it appears "
@@ -150,7 +176,7 @@ glob MOCK_LLM_EXTRACTED_CANDIDATES: list[LLMExtractedCandidate] = [
              patient_visible_candidate=True
          ),
          LLMExtractedCandidate(
-             category="referral",
+             category=CandidateCategory.REFERRAL,
              value="community nutrition counselor",
              source_text=("I am referring you to a community nutrition counselor."),
              source_chunk_id="chunk-4",
@@ -158,7 +184,7 @@ glob MOCK_LLM_EXTRACTED_CANDIDATES: list[LLMExtractedCandidate] = [
              patient_visible_candidate=True
          ),
          LLMExtractedCandidate(
-             category="language_preference",
+             category=CandidateCategory.LANGUAGE_PREFERENCE,
              value="Spanish",
              source_text=("Can someone explain the instructions to me in Spanish?"),
              source_chunk_id="chunk-5",
@@ -330,6 +356,24 @@ def contains_blocked_medical_behavior(candidate: ExtractedCandidate) -> bool {
     return any(phrase in normalized for phrase in BLOCKED_MEDICAL_PHRASES);
 }
 
+def contains_instruction_injection(candidate: ExtractedCandidate) -> bool {
+    normalized: str = candidate.source_text.lower();
+    return any(phrase in normalized for phrase in BLOCKED_INJECTION_PHRASES);
+}
+
+def contains_fabricated_time(candidate: ExtractedCandidate) -> bool {
+    value: str = candidate.value.lower();
+    evidence: str = candidate.source_text.lower();
+    for token in PROTECTED_TIME_TOKENS {
+        if token in value and token not in evidence {
+            return True;
+        }
+    }
+    value_digits: list[str] = digit_tokens(value);
+    evidence_digits: list[str] = digit_tokens(evidence);
+    return any(token not in evidence_digits for token in value_digits);
+}
+
 def validate_extracted_candidates(
     candidates: list[ExtractedCandidate], transcript: list[TranscriptChunkDTO]
 ) -> CandidateValidationResult {
@@ -395,6 +439,18 @@ def validate_extracted_candidates(
             return CandidateValidationResult(
                 error_code="AI_PROHIBITED_MEDICAL_CONTENT",
                 message="A candidate attempted prohibited medical behavior."
+            );
+        }
+        if contains_instruction_injection(candidate) {
+            return CandidateValidationResult(
+                error_code="AI_INSTRUCTION_INJECTION",
+                message="Transcript instructions directed at the model were treated as untrusted data."
+            );
+        }
+        if contains_fabricated_time(candidate) {
+            return CandidateValidationResult(
+                error_code="AI_FABRICATED_DETAIL",
+                message="A candidate added a date or time detail absent from its evidence."
             );
         }
 
@@ -538,7 +594,7 @@ def run_candidate_extraction(
             raw_proposals = mock_extract_candidate_proposals(prompt_text);
         } elif normalized == "live" {
             raw_proposals = extract_candidate_proposals(prompt_text);
-        } elif normalized == "test-malformed" {
+        } elif normalized in ["mock_malformed", "test-malformed"] {
             raw_proposals = malformed_mock_extraction(prompt_text);
         } elif normalized == "test-api-error" {
             raise RuntimeError("simulated provider exception");
@@ -705,6 +761,7 @@ def copy_plan_items(
         original: PlanItemDTO = originals[index];
         output.append(
             PlanItemDTO(
+                id=original.id,
                 kind=original.kind,
                 text=texts[index],
                 owner=original.owner,
@@ -799,6 +856,15 @@ def run_brief_enhancement(
             normalized,
             "AI_CREDENTIALS_MISSING",
             "Live model credentials are unavailable; approved English was used.",
+            is_translation
+        );
+    }
+    if normalized == "mock_malformed" {
+        return enhancement_fallback(
+            original,
+            normalized,
+            "AI_MALFORMED_OUTPUT",
+            "The diagnostic mock returned malformed structured output; approved English was used.",
             is_translation
         );
     }
@@ -909,6 +975,34 @@ def run_question_match(
             normalized,
             "AI_CREDENTIALS_MISSING",
             "Live model credentials are unavailable; deterministic matching was used."
+        );
+    }
+    if normalized == "test-no-key" {
+        return question_match_fallback(
+            normalized,
+            "AI_CREDENTIALS_MISSING",
+            "Live model credentials are unavailable; deterministic matching was used."
+        );
+    }
+    if normalized == "mock_malformed" {
+        return question_match_fallback(
+            normalized,
+            "AI_MALFORMED_OUTPUT",
+            "The diagnostic mock returned malformed matching output; deterministic matching was used."
+        );
+    }
+    if normalized == "test-api-error" {
+        return question_match_fallback(
+            normalized,
+            "AI_PROVIDER_ERROR",
+            "The model request failed; deterministic matching was used."
+        );
+    }
+    if normalized == "test-timeout" {
+        return question_match_fallback(
+            normalized,
+            "AI_TIMEOUT",
+            "The model request timed out; deterministic matching was used."
         );
     }
 
