@@ -4,8 +4,9 @@ Pa-Co CareGraph is a Jac-native verified continuity-of-care graph that turns
 synthetic consultation information into clinician-approved, traceable patient
 follow-up plans.
 
-Development is underway. The production-shaped backend is implemented on Jac
-0.34.7; frontend work remains separately owned.
+Development is underway. The production-shaped backend and deterministic
+multimodal workflow are implemented on Jac 0.34.7; frontend work remains
+separately owned.
 
 ## Backend status
 
@@ -15,6 +16,13 @@ clinician decisions, creates typed care obligations, detects documentation
 gaps, stores append-only resolutions, generates an approved-only checklist,
 answers from stored evidence, detects contradictions without overwriting
 either statement, and resets one synthetic session.
+
+The additive multimodal path streams prepared or browser-produced
+speaker-labeled chunks into the same evidence graph, validates small synthetic
+document images, optionally exercises a typed Jac `Image` seam, creates only
+pending document proposals, drafts/edits/approves a sourced clinician-review
+note, derives an encounter timeline, and returns English/Spanish scripts for
+browser speech synthesis. Raw audio and raw image bytes are never persisted.
 
 Optional Jac `by llm()` helpers may propose unverified candidates, translate or
 simplify an approved brief, and select relevant verified IDs. Deterministic code
@@ -44,12 +52,19 @@ Run the complete gate from the repository root:
 /Users/aradhyamishra/.local/bin/jac check .
 /Users/aradhyamishra/.local/bin/jac test -d tests/ -v
 /Users/aradhyamishra/.local/bin/jac run tests/server_integration.jac
+/Users/aradhyamishra/.local/bin/jac run tests/multimodal_server.jac
 /Users/aradhyamishra/.local/bin/jac run tests/production_demo.jac
+/Users/aradhyamishra/.local/bin/jac run tests/multimodal_demo.jac
 ```
 
 `production_demo.jac` executes 36 checks in each cycle, five cycles in each of
 four mandatory modes: AI disabled, missing-key fallback, valid MockLLM, and
 malformed MockLLM. That is 20 full cycles and 720 checked steps.
+
+`multimodal_demo.jac` executes the 36-step encounter, document, note,
+timeline, audio, provenance, conflict, and reset flow three times in each of
+deterministic, missing-key fallback, and valid MockLLM modes: nine complete
+multimodal cycles.
 
 ## Canonical graph
 
@@ -67,6 +82,14 @@ Patient -HasQuestion→ PatientQuestion -HasAnswer→ PatientAnswer
 ChecklistItem -SupportedBy→ VerifiedFact
 PatientAnswer -AnsweredFrom→ VerifiedFact
 VerifiedFact -VerifiedFrom→ CandidateFact
+
+Encounter -HasCaptureSession→ CaptureSession -ProducedChunk→ TranscriptChunk
+Encounter -HasSourceArtifact→ SourceArtifact -RepresentsDocument→ DocumentImage
+DocumentImage -ContainsTextBlock→ DocumentTextBlock
+CandidateFact -ExtractedFromDocument→ DocumentTextBlock
+Encounter -HasClinicianNote→ ClinicianNoteDraft -ContainsSection→ NoteSection
+NoteSection -NoteSupportedBy→ VerifiedFact
+Patient -HasAudioScript→ PatientAudioScript -AudioGeneratedFrom→ PatientBrief
 ```
 
 Four endpoint-constrained representation edges distinguish medication, lab,
@@ -132,6 +155,40 @@ internal walkers. Raw HTTP consumers read `BackendResponse` at
 are `created_graph_ids`, `traversal_trace`, `provenance_chains`, relationship
 projections, and persistent plan-item/answer IDs.
 
+Additive multimodal actions are:
+
+```text
+start_capture_session
+append_transcript_chunk
+finalize_capture_session
+cancel_capture_session
+get_capture_session
+load_prepared_voice_demo
+ingest_document_image
+get_document_extraction
+retry_document_extraction
+generate_clinician_note_draft
+update_note_section
+approve_clinician_note
+get_clinician_note
+get_encounter_timeline
+trace_output_to_source
+generate_patient_audio_script
+```
+
+All generated function actions use JSON request bodies except
+`ingest_document_image`, which uses Jac's native `multipart/form-data`
+`UploadFile` boundary. The exact `FormData` mapping is in
+[MULTIMODAL_FRONTEND_HANDOFF.md](MULTIMODAL_FRONTEND_HANDOFF.md).
+
+Reset a synthetic demo session while the backend is running:
+
+```bash
+curl -H 'Content-Type: application/json' \
+  -d '{"session_id":"demo-default"}' \
+  http://localhost:8000/function/reset_demo
+```
+
 ## Optional AI
 
 Copy variable names from `.env.example`; never commit a populated `.env`.
@@ -153,6 +210,10 @@ only IDs from the current verified, visible, non-conflicted allow-list; the
 answer is always assembled deterministically.
 
 No cloud key was created and no multi-gigabyte local model was downloaded.
+Browser `SpeechRecognition`, `getUserMedia`, and `speechSynthesis` are client
+adapters rather than server-native transcription/TTS. The reliable judging
+path remains prepared text, deterministic document extraction, and browser
+playback of an approved script.
 
 ## Frontend integration
 
@@ -162,7 +223,9 @@ branch point, display recoverable messages, use stable DTO IDs, and never
 reimplement verification or graph rules in frontend code.
 
 Exact mappings and an integration sequence are in
-[FRONTEND_HANDOFF.md](FRONTEND_HANDOFF.md). Backend work does not edit
+[FRONTEND_HANDOFF.md](FRONTEND_HANDOFF.md) and
+[MULTIMODAL_FRONTEND_HANDOFF.md](MULTIMODAL_FRONTEND_HANDOFF.md). Backend work
+does not edit
 `frontend.cl.jac`, `frontend.impl.jac`, `components/`, `styles/`, frontend mock
 data, or frontend tests.
 
@@ -191,7 +254,9 @@ data, or frontend tests.
 
 Core code is in `main.jac`, `models.sv.jac`, `extraction.sv.jac`,
 `ai.sv.jac`, `walkers.sv.jac`, `patient_agent.sv.jac`, `endpoints.sv.jac`,
-and `jac.toml`. Verification lives in `tests/`; architecture, contract, demo,
+`multimodal_data.sv.jac`, `multimodal_ai.sv.jac`,
+`multimodal_walkers.sv.jac`, `multimodal_endpoints.sv.jac`, and `jac.toml`.
+Verification lives in `tests/`; architecture, contract, demo,
 model, judge, and frontend handoff documents live at the repository root.
 
 The architecture checkpoint is `566a319`. A commit cannot contain its own

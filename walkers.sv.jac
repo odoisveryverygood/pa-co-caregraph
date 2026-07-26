@@ -47,6 +47,17 @@ import from models {
     ChecklistItem,
     PatientQuestion,
     PatientAnswer,
+    CaptureSession,
+    AudioMetadata,
+    SourceArtifact,
+    DocumentImage,
+    DocumentTextBlock,
+    ClinicianNoteDraft,
+    NoteSection,
+    NoteApprovalEvent,
+    NoteEditEvent,
+    TimelineEvent,
+    PatientAudioScript,
     HasSession,
     SessionOwns,
     HasPatient,
@@ -54,6 +65,7 @@ import from models {
     ContainsChunk,
     HasCandidate,
     ExtractedFrom,
+    ExtractedFromDocument,
     PromotedTo,
     HasVerifiedFact,
     VerifiedFrom,
@@ -92,6 +104,23 @@ import from models {
     HasQuestion,
     HasAnswer,
     AnsweredFrom,
+    HasCaptureSession,
+    ProducedChunk,
+    HasAudioMetadata,
+    HasSourceArtifact,
+    RepresentsDocument,
+    ContainsTextBlock,
+    HasClinicianNote,
+    NoteGeneratedFrom,
+    ContainsSection,
+    NoteSupportedBy,
+    ApprovedByEvent,
+    HasNoteEdit,
+    SupersedesNote,
+    HasTimelineEvent,
+    HasAudioScript,
+    AudioGeneratedFrom,
+    AudioSupportedBy,
     candidate_to_dto,
     verified_to_dto,
     gap_to_dto,
@@ -354,9 +383,12 @@ def seed_transcript_graph(session: DemoSession) {
         chunk = TranscriptChunk(
             session_id=session.id,
             id=seed.id,
+            encounter_id=encounter.id,
             sequence=seed.sequence,
             speaker=seed.speaker,
-            text=seed.text
+            text=seed.text,
+            source_type="prepared_transcript",
+            finalized=True
         );
         own_node(session, chunk);
         encounter +>:ContainsChunk():+> chunk;
@@ -392,6 +424,8 @@ def seed_prepared_candidate_graph(session: DemoSession) -> bool {
             confidence=seed.confidence,
             status=CandidateStatus.PENDING,
             source_chunk_id=seed.source_chunk_id,
+            source_kind="transcript",
+            source_text=sources[0].text,
             created_at=seed.created_at
         );
         own_node(session, candidate);
@@ -456,9 +490,12 @@ def add_contradiction_candidate(session: DemoSession) -> bool {
     chunk = TranscriptChunk(
         session_id=session.id,
         id=chunk_seed.id,
+        encounter_id=active_encounter.id,
         sequence=chunk_seed.sequence,
         speaker=chunk_seed.speaker,
-        text=chunk_seed.text
+        text=chunk_seed.text,
+        source_type="prepared_transcript",
+        finalized=True
     );
     own_node(session, chunk);
     active_encounter +>:ContainsChunk():+> chunk;
@@ -471,6 +508,8 @@ def add_contradiction_candidate(session: DemoSession) -> bool {
         confidence=candidate_seed.confidence,
         status=CandidateStatus.PENDING,
         source_chunk_id=candidate_seed.source_chunk_id,
+        source_kind="transcript",
+        source_text=chunk.text,
         created_at=candidate_seed.created_at
     );
     own_node(session, candidate);
@@ -511,6 +550,11 @@ def build_relationships(session: DemoSession) -> list[GraphRelationshipDTO] {
         output.append(relationship(active_encounter.id, "HasCandidate", candidate.id));
         for chunk in [candidate->:ExtractedFrom:->] {
             output.append(relationship(candidate.id, "ExtractedFrom", chunk.id));
+        }
+        for block in [candidate->:ExtractedFromDocument:->] {
+            output.append(
+                relationship(candidate.id, "ExtractedFromDocument", block.id)
+            );
         }
         for verified in [candidate->:PromotedTo:->] {
             output.append(relationship(candidate.id, "PromotedTo", verified.id));
@@ -588,6 +632,61 @@ def build_relationships(session: DemoSession) -> list[GraphRelationshipDTO] {
             for fact in [answer->:AnsweredFrom:->] {
                 output.append(relationship(answer.id, "AnsweredFrom", fact.id));
             }
+        }
+    }
+    for capture in [active_encounter->:HasCaptureSession:->] {
+        output.append(
+            relationship(active_encounter.id, "HasCaptureSession", capture.id)
+        );
+        for chunk in [capture->:ProducedChunk:->] {
+            output.append(relationship(capture.id, "ProducedChunk", chunk.id));
+        }
+        for metadata in [capture->:HasAudioMetadata:->] {
+            output.append(relationship(capture.id, "HasAudioMetadata", metadata.id));
+        }
+    }
+    for artifact in [active_encounter->:HasSourceArtifact:->] {
+        output.append(
+            relationship(active_encounter.id, "HasSourceArtifact", artifact.id)
+        );
+        for document in [artifact->:RepresentsDocument:->] {
+            output.append(relationship(artifact.id, "RepresentsDocument", document.id));
+            for block in [document->:ContainsTextBlock:->] {
+                output.append(relationship(document.id, "ContainsTextBlock", block.id));
+            }
+        }
+    }
+    for note in [active_encounter->:HasClinicianNote:->] {
+        output.append(relationship(active_encounter.id, "HasClinicianNote", note.id));
+        for encounter in [note->:NoteGeneratedFrom:->] {
+            output.append(relationship(note.id, "NoteGeneratedFrom", encounter.id));
+        }
+        for section in [note->:ContainsSection:->] {
+            output.append(relationship(note.id, "ContainsSection", section.id));
+            for fact in [section->:NoteSupportedBy:->] {
+                output.append(relationship(section.id, "NoteSupportedBy", fact.id));
+            }
+        }
+        for event in [note->:ApprovedByEvent:->] {
+            output.append(relationship(note.id, "ApprovedByEvent", event.id));
+        }
+        for event in [note->:HasNoteEdit:->] {
+            output.append(relationship(note.id, "HasNoteEdit", event.id));
+        }
+        for prior_note in [note->:SupersedesNote:->] {
+            output.append(relationship(note.id, "SupersedesNote", prior_note.id));
+        }
+    }
+    for event in [active_encounter->:HasTimelineEvent:->] {
+        output.append(relationship(active_encounter.id, "HasTimelineEvent", event.id));
+    }
+    for script in [active_patient->:HasAudioScript:->] {
+        output.append(relationship(active_patient.id, "HasAudioScript", script.id));
+        for brief in [script->:AudioGeneratedFrom:->] {
+            output.append(relationship(script.id, "AudioGeneratedFrom", brief.id));
+        }
+        for fact in [script->:AudioSupportedBy:->] {
+            output.append(relationship(script.id, "AudioSupportedBy", fact.id));
         }
     }
     return output;
@@ -1086,6 +1185,8 @@ walker CandidateProposalWalker(TraceableWalker) {
                 confidence=proposal.confidence,
                 status=CandidateStatus.PENDING,
                 source_chunk_id=proposal.source_chunk_id,
+                source_kind="transcript",
+                source_text=proposal.source_text,
                 created_at=candidate_created_at(proposal)
             );
             own_node(active_session, candidate);
@@ -1251,10 +1352,11 @@ walker VerificationWalker(TraceableWalker) {
         active_session: DemoSession = session as DemoSession;
         encounters: list[Encounter] = [here<-:HasCandidate:<-];
         sources: list[TranscriptChunk] = [here->:ExtractedFrom:->];
+        source_blocks: list[DocumentTextBlock] = [here->:ExtractedFromDocument:->];
         if (
             len(encounters) != 1
             or encounters[0].session_id != self.session_id
-            or len(sources) != 1
+            or (len(sources) + len(source_blocks)) != 1
         ) {
             response = failure_response(
                 "PROVENANCE_MISSING",
@@ -1267,6 +1369,7 @@ walker VerificationWalker(TraceableWalker) {
             disengage;
         }
         encounter: Encounter = encounters[0];
+        source_text: str = sources[0].text if sources else source_blocks[0].text;
         normalized: str = self.decision.lower();
         if here.status == CandidateStatus.ACCEPTED {
             if normalized == VerificationDecision.ACCEPT {
@@ -1361,7 +1464,11 @@ walker VerificationWalker(TraceableWalker) {
             verified_at=deterministic_timestamp(active_session.graph_version),
             visible_to_patient=True,
             source_chunk_id=here.source_chunk_id,
-            source_text=sources[0].text
+            source_kind=here.source_kind,
+            source_artifact_id=here.source_artifact_id,
+            source_text_block_id=here.source_text_block_id,
+            source_region=here.source_region,
+            source_text=source_text
         );
         own_node(active_session, verified);
         encounter +>:HasVerifiedFact():+> verified;
@@ -1375,12 +1482,15 @@ walker VerificationWalker(TraceableWalker) {
             due_window: str = (
                 parts[1].strip().removeprefix("due ").strip() if len(parts) > 1 else ""
             );
+            lab_owner: str = (
+                "clinic-lab-team" if here.source_kind == "document" else ""
+            );
             lab = LabOrder(
                 session_id=self.session_id,
                 id=f"lab-{verified.id}",
                 test_name=test_name,
                 due_window=due_window,
-                owner="",
+                owner=lab_owner,
                 status="ordered",
                 source_fact_id=verified.id
             );
@@ -1395,7 +1505,7 @@ walker VerificationWalker(TraceableWalker) {
                     id=f"task-{verified.id}",
                     task_type="lab_coordination",
                     title=f"Coordinate {test_name}",
-                    owner="",
+                    owner=lab_owner,
                     due_date=due_window,
                     status="open"
                 )
@@ -1435,7 +1545,7 @@ walker VerificationWalker(TraceableWalker) {
             medication = MedicationInstruction(
                 session_id=self.session_id,
                 id=f"medication-{verified.id}",
-                instruction_text=sources[0].text,
+                instruction_text=source_text,
                 timing_text="Follow the timing on the existing prescription.",
                 active=True,
                 source_fact_id=verified.id
@@ -2412,9 +2522,11 @@ walker PatientPlanWalker(TraceableWalker) {
             disengage;
         }
         for old_brief in [(patient as Patient)->:HasBrief:->] {
-            old_brief.current = False;
-            for old_item in [old_brief->:HasChecklistItem:->] {
-                old_item.current = False;
+            if old_brief.language.lower() == self.language.lower() {
+                old_brief.current = False;
+                for old_item in [old_brief->:HasChecklistItem:->] {
+                    old_item.current = False;
+                }
             }
         }
         here.graph_version += 1;

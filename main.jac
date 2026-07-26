@@ -15,6 +15,15 @@ import from models {
     TraversalStepDTO,
     ProvenanceChainDTO,
     GraphRelationshipDTO,
+    CaptureSessionDTO,
+    SourceArtifactDTO,
+    DocumentTextBlockDTO,
+    MultimodalCandidateDTO,
+    NoteSectionDTO,
+    ClinicianNoteDraftDTO,
+    EncounterTimelineEventDTO,
+    PatientAudioScriptDTO,
+    MultimodalProvenanceDTO,
 }
 import from endpoints {
     load_demo_encounter,
@@ -30,4 +39,22 @@ import from endpoints {
     trace_provenance,
     reset_demo,
     add_demo_contradiction,
+}
+import from multimodal_endpoints {
+    start_capture_session,
+    append_transcript_chunk,
+    finalize_capture_session,
+    cancel_capture_session,
+    get_capture_session,
+    load_prepared_voice_demo,
+    ingest_document_image,
+    get_document_extraction,
+    retry_document_extraction,
+    generate_clinician_note_draft,
+    update_note_section,
+    approve_clinician_note,
+    get_clinician_note,
+    get_encounter_timeline,
+    trace_output_to_source,
+    generate_patient_audio_script,
 }

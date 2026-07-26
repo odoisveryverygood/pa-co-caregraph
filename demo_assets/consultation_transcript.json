@@ -1,0 +1,12 @@
+{
+  "synthetic": true,
+  "patient": "Maya Rivera",
+  "encounter_id": "encounter-maya-001",
+  "chunks": [
+    {"sequence": 1, "speaker": "Doctor", "text": "We will order a blood test to be completed this week."},
+    {"sequence": 2, "speaker": "Doctor", "text": "Please return in two weeks so we can review the results."},
+    {"sequence": 3, "speaker": "Doctor", "text": "Continue your current medication exactly as it appears on your existing prescription."},
+    {"sequence": 4, "speaker": "Doctor", "text": "I am referring you to a community nutrition counselor."},
+    {"sequence": 5, "speaker": "Patient", "text": "Can someone explain the instructions to me in Spanish?"}
+  ]
+}

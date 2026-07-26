@@ -1004,3 +1004,381 @@ diagnostic code.
   model write the answer.
 - Translation and simplification preserve source IDs outside the model.
 - The deterministic P0 flow uses no model provider and requires no API key.
+
+## Multimodal additive contract
+
+Status: frozen before multimodal implementation. Every earlier action and
+field remains compatible. New actions use Jac's existing transport envelope
+and the nested `BackendResponse`.
+
+### Enums and DTOs
+
+```text
+InputSourceType = typed_text | prepared_transcript | live_voice |
+                  audio_upload | camera_capture | image_upload
+CaptureSessionStatus = created | permission_required | recording |
+                       transcribing | processing | completed | cancelled |
+                       failed | fallback
+SourceArtifactType = transcript_chunk | audio_metadata | lab_document |
+                     referral_document | appointment_card |
+                     after_visit_document | clinician_hint
+NoteStatus = draft | edited | approved | superseded
+ExtractionMode = deterministic | browser_native | local_model | cloud_model |
+                 mock | fallback
+
+CaptureSessionDTO
+- id, encounter_id, session_id, input_source, status, extraction_mode
+- started_at, completed_at, fallback_used, chunk_count, error_code, recoverable
+
+TranscriptChunkDTO (additive)
+- id, encounter_id, capture_session_id, sequence, speaker, text
+- started_at, ended_at, confidence, source_type, finalized
+
+SourceArtifactDTO
+- id, encounter_id, artifact_type, display_name, mime_type, synthetic
+- extraction_mode, extraction_status, created_at, temporary_content_deleted
+
+DocumentTextBlockDTO
+- id, source_artifact_id, sequence, text, confidence, page_number
+- bounding_region, source_hash
+
+MultimodalCandidateDTO
+- id, category, value, confidence, status, source_kind
+- source_artifact_id, source_chunk_id, source_text_block_id
+- source_text, source_region, created_at
+
+NoteSectionDTO
+- id, section_type, heading, content, source_fact_ids, source_artifact_ids
+- manually_edited, approved
+
+ClinicianNoteDraftDTO
+- id, encounter_id, status, patient_concerns, confirmed_instructions
+- medication_instructions, laboratory_orders, referrals, follow_up
+- unresolved_gaps, note_sections, source_fact_ids
+- generated_at, edited_at, approved_at, approved_by
+
+EncounterTimelineEventDTO
+- id, event_type, occurred_at, title, description
+- related_node_ids, source_fact_ids, graph_version
+
+PatientAudioScriptDTO
+- patient_id, language, text, source_fact_ids
+- generated_from_approved_plan, voice_name, fallback_used
+
+MultimodalProvenanceDTO
+- output_type, output_id, section_id, ordered_steps, source_excerpt
+- source_type, verification_status, clinician_id, complete
+```
+
+`BackendResponse` adds `capture_session`, `transcript_chunk`,
+`transcript_chunks`, `source_artifact`, `document_text_blocks`,
+`multimodal_candidates`, `clinician_note`, `timeline`,
+`patient_audio_script`, and `multimodal_provenance`.
+
+Every action can return this cross-session-safe failure:
+
+```json
+{"success":false,"error_code":"RESOURCE_NOT_FOUND","message":"The synthetic resource was not found in this session.","recoverable":true,"current_graph_version":4}
+```
+
+### Voice and transcript actions
+
+#### `start_capture_session(encounter_id, input_source, session_id="demo-default")`
+
+Public function spawning `StartCaptureSessionWalker`. `encounter_id` and
+`input_source` are required. It returns `capture_session`, creates one graph
+node, and increments the graph version. `live_voice` begins in
+`permission_required`; prepared/typed input begins in `created`. Errors:
+`DEMO_NOT_LOADED`, `ENCOUNTER_NOT_FOUND`, `INVALID_INPUT_SOURCE`,
+`ACTIVE_CAPTURE_EXISTS`. No provider fallback is needed.
+
+```json
+{"encounter_id":"encounter-maya-001","input_source":"prepared_transcript","session_id":"demo-default"}
+```
+```json
+{"success":true,"current_graph_version":2,"capture_session":{"id":"capture-demo-default-2","status":"created","chunk_count":0}}
+```
+```json
+{"success":false,"error_code":"ACTIVE_CAPTURE_EXISTS","recoverable":true}
+```
+
+#### `append_transcript_chunk(capture_session_id, sequence, speaker, text, started_at="", ended_at="", confidence=1.0, session_id="demo-default")`
+
+Public function spawning `AppendTranscriptChunkWalker`. The first four fields
+are required. It returns `transcript_chunk` and `capture_session`; a new chunk
+increments the version and identical replay is idempotent. Errors:
+`CAPTURE_NOT_FOUND`, `CAPTURE_CLOSED`, `INVALID_SEQUENCE`,
+`OUT_OF_ORDER_CHUNK`, `DUPLICATE_SEQUENCE`, `INVALID_SPEAKER`,
+`BLANK_TRANSCRIPT`, `INVALID_CONFIDENCE`. It never invokes a model.
+
+```json
+{"capture_session_id":"capture-demo-default-2","sequence":1,"speaker":"Doctor","text":"We will order a blood test to be completed this week.","confidence":1.0,"session_id":"demo-default"}
+```
+```json
+{"success":true,"transcript_chunk":{"id":"chunk-1","sequence":1,"speaker":"Doctor","finalized":true},"capture_session":{"status":"recording","chunk_count":1}}
+```
+```json
+{"success":false,"error_code":"OUT_OF_ORDER_CHUNK","recoverable":true}
+```
+
+#### `finalize_capture_session(capture_session_id, session_id="demo-default")`
+
+Public function spawning `FinalizeCaptureSessionWalker`. It returns a
+completed `capture_session` and pending `candidate_facts`, mutates once, and
+is idempotent. Internal state passes through `transcribing` and `processing`.
+Errors: `CAPTURE_NOT_FOUND`, `EMPTY_CAPTURE`, `CAPTURE_CANCELLED`,
+`TRANSCRIPT_SEQUENCE_GAP`. Optional extraction failure uses prepared
+candidates and reports `TRANSCRIPTION_FALLBACK_USED`.
+
+```json
+{"capture_session_id":"capture-demo-default-2","session_id":"demo-default"}
+```
+```json
+{"success":true,"capture_session":{"status":"completed","chunk_count":5},"candidate_facts":[{"id":"candidate-lab","status":"pending"}]}
+```
+```json
+{"success":true,"recoverable":true,"error_code":"TRANSCRIPTION_FALLBACK_USED","capture_session":{"status":"completed","fallback_used":true}}
+```
+
+#### `cancel_capture_session(capture_session_id, session_id="demo-default")`
+
+Public function spawning `CancelCaptureSessionWalker`. It returns
+`capture_session`, mutates an unfinished capture, increments once, and is
+idempotent. Errors: `CAPTURE_NOT_FOUND`, `CAPTURE_ALREADY_COMPLETED`.
+
+```json
+{"capture_session_id":"capture-demo-default-2","session_id":"demo-default"}
+```
+```json
+{"success":true,"capture_session":{"status":"cancelled"}}
+```
+```json
+{"success":false,"error_code":"CAPTURE_ALREADY_COMPLETED","recoverable":false}
+```
+
+#### `get_capture_session(capture_session_id, session_id="demo-default")`
+
+Read-only public function. It returns `capture_session`; error:
+`CAPTURE_NOT_FOUND`.
+
+```json
+{"capture_session_id":"capture-demo-default-2","session_id":"demo-default"}
+```
+```json
+{"success":true,"capture_session":{"id":"capture-demo-default-2","chunk_count":3}}
+```
+```json
+{"success":false,"error_code":"CAPTURE_NOT_FOUND","recoverable":true}
+```
+
+#### `load_prepared_voice_demo(encounter_id, session_id="demo-default")`
+
+Public function spawning `LoadPreparedVoiceDemoWalker`. It starts a prepared
+capture then uses the same append walker for all five chunks; it never creates
+a parallel source graph. It returns the recording `capture_session` and
+ordered `transcript_chunks`. Repeated calls return the same prepared capture.
+Errors mirror start/append and `PREPARED_STREAM_FAILED`.
+
+```json
+{"encounter_id":"encounter-maya-001","session_id":"demo-default"}
+```
+```json
+{"success":true,"capture_session":{"status":"recording","chunk_count":5},"transcript_chunks":[{"sequence":1},{"sequence":2},{"sequence":3},{"sequence":4},{"sequence":5}]}
+```
+```json
+{"success":false,"error_code":"PREPARED_STREAM_FAILED","recoverable":true}
+```
+
+### Document actions
+
+#### `ingest_document_image(encounter_id, document_type, filename, mime_type, image_input, synthetic, session_id="demo-default", extraction_mode="deterministic")`
+
+Public function spawning `DocumentIngestWalker`; the first six fields are
+required. Over HTTP this action consumes `multipart/form-data`;
+`image_input` is an `UploadFile` and the other fields are form fields.
+PNG/JPEG/WEBP content is limited to 1 MiB decoded. This representation keeps
+raw image bytes out of Jac's generated function-parameter console line (the
+runtime prints only upload filename, size, and headers). Direct backend tests
+use a non-public data-URL adapter that reaches the same validation walker.
+The action returns `source_artifact`, `document_text_blocks`, and pending
+`multimodal_candidates`; persists metadata/text only; deletes temporary
+content; and increments the version. Errors: `ENCOUNTER_NOT_FOUND`,
+`REAL_DATA_PROHIBITED`, `DOCUMENT_TYPE_INVALID`, `MIME_TYPE_INVALID`,
+`IMAGE_TOO_LARGE`, `IMAGE_DATA_URL_INVALID`, `IMAGE_EMPTY`, `IMAGE_CORRUPT`,
+`IMAGE_READ_FAILED`, `EXTRACTION_MODE_INVALID`, `DOCUMENT_ALREADY_INGESTED`.
+A model/key failure uses deterministic extraction with
+`VISION_FALLBACK_USED`.
+
+```bash
+curl -F encounter_id=encounter-maya-001 \
+  -F document_type=lab_document \
+  -F filename=synthetic_lab_order.png \
+  -F mime_type=image/png \
+  -F 'image_input=@synthetic_lab_order.png;type=image/png' \
+  -F synthetic=true \
+  -F session_id=demo-default \
+  -F extraction_mode=deterministic \
+  http://localhost:8000/function/ingest_document_image
+```
+```json
+{"success":true,"source_artifact":{"id":"artifact-demo-default-lab-document","temporary_content_deleted":true,"extraction_status":"completed"},"document_text_blocks":[{"sequence":1,"bounding_region":"0,0,100,20"}],"multimodal_candidates":[{"category":"lab_order","status":"pending","source_kind":"document"}]}
+```
+```json
+{"success":false,"error_code":"IMAGE_CORRUPT","recoverable":true}
+```
+
+#### `get_document_extraction(source_artifact_id, session_id="demo-default")`
+
+Read-only public function returning artifact, blocks, and candidates. Error:
+`SOURCE_ARTIFACT_NOT_FOUND`.
+
+```json
+{"source_artifact_id":"artifact-demo-default-lab-document","session_id":"demo-default"}
+```
+```json
+{"success":true,"source_artifact":{"extraction_status":"completed"},"document_text_blocks":[{"sequence":1}]}
+```
+```json
+{"success":false,"error_code":"SOURCE_ARTIFACT_NOT_FOUND","recoverable":true}
+```
+
+#### `retry_document_extraction(source_artifact_id, extraction_mode, session_id="demo-default")`
+
+Public function spawning the extraction walker. Completed deterministic
+extraction is idempotent. Raw bytes are never retained, so retry validates
+stored synthetic blocks and returns the existing candidate; unavailable
+model input reports `RAW_CONTENT_UNAVAILABLE` or safely falls back. Errors:
+`SOURCE_ARTIFACT_NOT_FOUND`, `EXTRACTION_MODE_INVALID`.
+
+```json
+{"source_artifact_id":"artifact-demo-default-lab-document","extraction_mode":"mock","session_id":"demo-default"}
+```
+```json
+{"success":true,"source_artifact":{"extraction_mode":"mock"},"multimodal_candidates":[{"status":"pending"}]}
+```
+```json
+{"success":true,"recoverable":true,"error_code":"VISION_FALLBACK_USED","source_artifact":{"extraction_mode":"fallback"}}
+```
+
+### Clinician note actions
+
+#### `generate_clinician_note_draft(encounter_id, clinician_hints="", session_id="demo-default")`
+
+Public function spawning `GenerateClinicianNoteDraftWalker`. It returns
+`clinician_note`, mutates, and increments the version. Only current verified
+facts, gaps/conflicts, and clearly labeled hints are used. Errors:
+`ENCOUNTER_NOT_FOUND`, `NO_VERIFIED_FACTS`, `UNSAFE_CLINICIAN_HINT`.
+Deterministic generation is always available.
+
+```json
+{"encounter_id":"encounter-maya-001","clinician_hints":"Confirm interpreter follow-up.","session_id":"demo-default"}
+```
+```json
+{"success":true,"clinician_note":{"status":"draft","note_sections":[{"section_type":"laboratory_orders","source_fact_ids":["verified-candidate-lab"]}]}}
+```
+```json
+{"success":false,"error_code":"NO_VERIFIED_FACTS","recoverable":true}
+```
+
+#### `update_note_section(note_id, section_id, content, clinician_id, session_id="demo-default")`
+
+Public function spawning `UpdateNoteSectionWalker`. It preserves generated
+text, stores edited text separately, returns `clinician_note`, and increments
+the version. Editing an approved note creates a superseding draft. Errors:
+`NOTE_NOT_FOUND`, `SECTION_NOT_FOUND`, `INVALID_CLINICIAN_ID`,
+`BLANK_NOTE_CONTENT`, `UNSAFE_NOTE_CONTENT`.
+
+```json
+{"note_id":"note-demo-default-8","section_id":"note-demo-default-8-labs","content":"Blood test remains due this week.","clinician_id":"clinician-1","session_id":"demo-default"}
+```
+```json
+{"success":true,"clinician_note":{"status":"edited","note_sections":[{"manually_edited":true}]}}
+```
+```json
+{"success":false,"error_code":"UNSAFE_NOTE_CONTENT","recoverable":true}
+```
+
+#### `approve_clinician_note(note_id, clinician_id, session_id="demo-default")`
+
+Public function spawning `ApproveClinicianNoteWalker`. It validates sections
+and unresolved unsafe content, persists `NoteApprovalEvent`, returns approved
+`clinician_note`, and increments once. Repeated approval is idempotent. Errors:
+`NOTE_NOT_FOUND`, `INVALID_CLINICIAN_ID`, `NOTE_SECTION_MISSING`,
+`UNRESOLVED_NOTE_CONFLICT`.
+
+```json
+{"note_id":"note-demo-default-8","clinician_id":"clinician-1","session_id":"demo-default"}
+```
+```json
+{"success":true,"clinician_note":{"status":"approved","approved_by":"clinician-1"}}
+```
+```json
+{"success":false,"error_code":"UNRESOLVED_NOTE_CONFLICT","recoverable":true}
+```
+
+#### `get_clinician_note(note_id, session_id="demo-default")`
+
+Read-only public function returning `clinician_note`. Error: `NOTE_NOT_FOUND`.
+
+```json
+{"note_id":"note-demo-default-8","session_id":"demo-default"}
+```
+```json
+{"success":true,"clinician_note":{"id":"note-demo-default-8","status":"approved"}}
+```
+```json
+{"success":false,"error_code":"NOTE_NOT_FOUND","recoverable":true}
+```
+
+### Timeline, provenance, and accessibility
+
+#### `get_encounter_timeline(encounter_id, session_id="demo-default")`
+
+Public function spawning `EncounterTimelineWalker`; read-only; returns ordered
+`timeline` events derived from graph/audit state. Error:
+`ENCOUNTER_NOT_FOUND`. No hardcoded event list is returned.
+
+```json
+{"encounter_id":"encounter-maya-001","session_id":"demo-default"}
+```
+```json
+{"success":true,"timeline":[{"event_type":"capture_started","graph_version":2}]}
+```
+```json
+{"success":false,"error_code":"ENCOUNTER_NOT_FOUND","recoverable":true}
+```
+
+#### `trace_output_to_source(output_type, output_id, section_id="", session_id="demo-default")`
+
+Public function spawning `MultimodalTraceProvenanceWalker`; read-only; supports
+candidate, note section, checklist item, and patient answer. It returns one
+`multimodal_provenance` chain per support fact. Errors:
+`OUTPUT_TYPE_INVALID`, `OUTPUT_NOT_FOUND`, `PROVENANCE_INCOMPLETE`.
+
+```json
+{"output_type":"note_section","output_id":"note-demo-default-8","section_id":"note-demo-default-8-labs","session_id":"demo-default"}
+```
+```json
+{"success":true,"multimodal_provenance":[{"source_type":"transcript_chunk","verification_status":"accepted","complete":true}]}
+```
+```json
+{"success":false,"error_code":"PROVENANCE_INCOMPLETE","recoverable":false}
+```
+
+#### `generate_patient_audio_script(language, session_id="demo-default")`
+
+Public function spawning `PatientAudioScriptWalker`. It uses only a current
+approved `PatientBrief`, returns `patient_audio_script`, and increments the
+version only on first creation. Text is still usable if browser speech
+synthesis is unavailable. Errors: `PATIENT_PLAN_NOT_FOUND`,
+`UNSUPPORTED_LANGUAGE`, `CONFLICTED_PLAN`.
+
+```json
+{"language":"Spanish","session_id":"demo-default"}
+```
+```json
+{"success":true,"patient_audio_script":{"language":"Spanish","generated_from_approved_plan":true,"source_fact_ids":["verified-candidate-lab"],"fallback_used":false}}
+```
+```json
+{"success":false,"error_code":"PATIENT_PLAN_NOT_FOUND","recoverable":true}
+```

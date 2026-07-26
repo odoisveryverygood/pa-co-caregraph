@@ -1,0 +1,36 @@
+{
+  "synthetic": true,
+  "documents": {
+    "lab_document": {
+      "blocks": [
+        {"sequence": 1, "text": "SYNTHETIC DEMO — Harbor Bridge Community Clinic", "bounding_region": "40,30,720,75"},
+        {"sequence": 2, "text": "Patient: Maya Rivera (fictional)", "bounding_region": "40,100,520,135"},
+        {"sequence": 3, "text": "Order: blood test; complete this week.", "bounding_region": "40,160,420,200"},
+        {"sequence": 4, "text": "Complete this week.", "bounding_region": "40,220,420,260"},
+        {"sequence": 5, "text": "Responsible team: Clinic Lab Team", "bounding_region": "40,280,600,320"}
+      ],
+      "candidate": {
+        "category": "lab_order",
+        "value": "blood test; due this week",
+        "source_block_sequence": 3,
+        "status": "pending"
+      }
+    },
+    "referral_document": {
+      "candidate": {
+        "category": "referral",
+        "value": "community nutrition counselor",
+        "source_block_sequence": 2,
+        "status": "pending"
+      }
+    },
+    "appointment_card": {
+      "candidate": {
+        "category": "follow_up",
+        "value": "appointment on 2026-08-09",
+        "source_block_sequence": 2,
+        "status": "pending"
+      }
+    }
+  }
+}
