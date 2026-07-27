@@ -1,0 +1,30 @@
+{
+  "success": true,
+  "error_code": "",
+  "message": "Transcript chunk translated.",
+  "recoverable": false,
+  "current_graph_version": 4,
+  "ai_status": {
+    "requested": true,
+    "used": false,
+    "fallback_used": true,
+    "mode": "deterministic",
+    "diagnostic_code": "TRANSLATION_CREDENTIALS_MISSING",
+    "diagnostic_message": "Optional translation used a safe deterministic fallback."
+  },
+  "translated_chunk": {
+    "id": "translation-demo-default-chunk-live-es-1-english-4",
+    "original_chunk_id": "chunk-live-es-1",
+    "capture_session_id": "capture-demo-default-2",
+    "source_language": "Spanish",
+    "target_language": "English",
+    "original_text": "Me he sentido mareada durante tres días.",
+    "translated_text": "I have felt dizzy for three days.",
+    "speaker": "Patient",
+    "sequence": 1,
+    "status": "fallback",
+    "translation_mode": "deterministic",
+    "fallback_used": true,
+    "created_at": "2026-07-26T18:00:04Z"
+  }
+}

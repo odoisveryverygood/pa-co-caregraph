@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "error_code": "",
+  "message": "Unverified live quick summary generated.",
+  "recoverable": false,
+  "current_graph_version": 7,
+  "live_quick_summary": {
+    "id": "quick-summary-demo-default-7",
+    "encounter_id": "encounter-maya-001",
+    "status": "completed",
+    "summary": "Patient: I have felt dizzy for three days. Doctor: A blood test will be ordered this week.",
+    "key_points": [
+      "I have felt dizzy for three days.",
+      "A blood test will be ordered this week."
+    ],
+    "source_chunk_ids": [
+      "chunk-live-es-1",
+      "chunk-live-en-2"
+    ],
+    "unverified": true,
+    "model_mode": "deterministic",
+    "fallback_used": false,
+    "generated_at": "2026-07-26T18:00:07Z"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "success": true,
+  "error_code": "",
+  "message": "Clarifying questions generated.",
+  "recoverable": false,
+  "current_graph_version": 15,
+  "suggested_questions": [
+    {
+      "id": "question-analysis-demo-default-15-1-gap-lab-owner-verified-candidate-lab",
+      "question": "Who is responsible for coordinating the blood test?",
+      "purpose": "confirm_responsibility",
+      "explanation": "Generated because the accepted care obligation has a current documentation gap.",
+      "source_fact_ids": [
+        "verified-candidate-lab"
+      ],
+      "related_gap_ids": [
+        "gap-lab-owner-verified-candidate-lab"
+      ],
+      "clinician_only": true,
+      "status": "open"
+    },
+    {
+      "id": "question-analysis-demo-default-15-1-gap-follow-up-date-verified-candidate-follow-up",
+      "question": "Has a specific follow-up date been scheduled?",
+      "purpose": "confirm_follow_up",
+      "explanation": "Generated because the accepted care obligation has a current documentation gap.",
+      "source_fact_ids": [
+        "verified-candidate-follow-up"
+      ],
+      "related_gap_ids": [
+        "gap-follow-up-date-verified-candidate-follow-up"
+      ],
+      "clinician_only": true,
+      "status": "open"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "success": true,
+  "error_code": "",
+  "message": "Verified encounter analysis completed.",
+  "recoverable": false,
+  "current_graph_version": 15,
+  "analysis_run": {
+    "id": "analysis-demo-default-15-1",
+    "encounter_id": "encounter-maya-001",
+    "status": "completed",
+    "graph_version": 15,
+    "accepted_fact_ids": [
+      "verified-candidate-lab",
+      "verified-candidate-follow-up",
+      "verified-candidate-medication",
+      "verified-candidate-referral"
+    ],
+    "rejected_fact_ids_excluded": [
+      "candidate-language"
+    ],
+    "summary": {
+      "id": "verified-summary-analysis-demo-default-15-1",
+      "encounter_id": "encounter-maya-001",
+      "summary": "Verified encounter information includes 1 accepted medication instruction(s), 1 laboratory order(s), 1 referral(s), 1 follow-up obligation(s).",
+      "patient_concerns": [],
+      "medications": [
+        "Continue your current medication exactly as it appears on your existing prescription."
+      ],
+      "allergies": [],
+      "laboratory_orders": [
+        "blood test; due this week"
+      ],
+      "referrals": [
+        "community nutrition counselor"
+      ],
+      "follow_ups": [
+        "two weeks"
+      ],
+      "outstanding_tasks": [
+        "Coordinate blood test",
+        "Schedule follow-up appointment"
+      ],
+      "contradictions": [],
+      "source_fact_ids": [
+        "verified-candidate-lab",
+        "verified-candidate-follow-up",
+        "verified-candidate-medication",
+        "verified-candidate-referral"
+      ],
+      "verified_only": true,
+      "generated_at": "2026-07-26T18:00:15Z"
+    },
+    "insights": [],
+    "questions": [],
+    "care_gaps": [],
+    "conflicts": [],
+    "source_fact_ids": [
+      "verified-candidate-lab",
+      "verified-candidate-follow-up",
+      "verified-candidate-medication",
+      "verified-candidate-referral"
+    ],
+    "model_mode": "deterministic",
+    "fallback_used": false,
+    "created_at": "2026-07-26T18:00:15Z",
+    "completed_at": "2026-07-26T18:00:15Z",
+    "stale": false,
+    "superseding_run_id": ""
+  }
+}

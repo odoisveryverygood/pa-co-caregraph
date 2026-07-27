@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="420" viewBox="0 0 800 420">
+  <rect width="800" height="420" fill="#f4fbf7"/>
+  <rect x="20" y="20" width="760" height="380" rx="20" fill="white" stroke="#17633a" stroke-width="4"/>
+  <text x="40" y="75" font-family="Arial" font-size="30" font-weight="bold" fill="#b42318">SYNTHETIC DEMO</text>
+  <text x="40" y="140" font-family="Arial" font-size="24" fill="#17633a">Fictional Appointment Card</text>
+  <text x="40" y="225" font-family="Arial" font-size="28" font-weight="bold">Follow-up appointment: 2026-08-09</text>
+  <text x="40" y="330" font-family="Arial" font-size="18" fill="#667085">Demonstration scheduling information only.</text>
+</svg>

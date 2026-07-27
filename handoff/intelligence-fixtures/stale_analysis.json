@@ -1,0 +1,31 @@
+{
+  "success": true,
+  "error_code": "",
+  "message": "New verified information is available. Re-run analysis.",
+  "recoverable": false,
+  "current_graph_version": 16,
+  "analysis_run": {
+    "id": "analysis-demo-default-15-1",
+    "encounter_id": "encounter-maya-001",
+    "status": "superseded",
+    "graph_version": 15,
+    "accepted_fact_ids": [
+      "verified-candidate-lab"
+    ],
+    "rejected_fact_ids_excluded": [],
+    "summary": null,
+    "insights": [],
+    "questions": [],
+    "care_gaps": [],
+    "conflicts": [],
+    "source_fact_ids": [
+      "verified-candidate-lab"
+    ],
+    "model_mode": "deterministic",
+    "fallback_used": false,
+    "created_at": "2026-07-26T18:00:15Z",
+    "completed_at": "2026-07-26T18:00:15Z",
+    "stale": true,
+    "superseding_run_id": ""
+  }
+}

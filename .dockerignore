@@ -1,0 +1,12 @@
+.git
+.github
+.jac
+.playwright-cli
+.vercel
+dist
+.env
+.env.*
+*.db
+*.db-shm
+*.db-wal
+demo_assets

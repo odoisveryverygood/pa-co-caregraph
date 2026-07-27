@@ -58,3 +58,4 @@ data/real-patient-data/
 patient_data/private/
 medical_data/private/
 phi/
+.vercel
