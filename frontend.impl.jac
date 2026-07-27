@@ -1134,16 +1134,17 @@ impl app.receiveCaptureStart(response: any) -> None {
         return;
     }
     backend_connected = True;
-    capture_session_id = response["capture_session"]["id"];
-    sessionStorage.setItem("hospi-pet-active-capture", capture_session_id);
-    voice_runtime["capture_id"] = capture_session_id;
+    new_capture_id: str = response["capture_session"]["id"];
+    capture_session_id = new_capture_id;
+    sessionStorage.setItem("hospi-pet-active-capture", new_capture_id);
+    voice_runtime["capture_id"] = new_capture_id;
     voice_runtime["queue"] = [];
     voice_runtime["pending"] = False;
     voice_runtime["sequence"] = 1;
     voice_runtime["finalize"] = False;
     voice_runtime["rows"] = [];
     voice_runtime["seconds"] = 0;
-    requestBrowserMicrophone(capture_session_id);
+    requestBrowserMicrophone(new_capture_id);
 }
 
 
