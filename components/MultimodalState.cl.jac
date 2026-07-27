@@ -1,6 +1,5 @@
 """Pure frontend helpers for multimodal controls and visit-note projection."""
 
-
 def:pub formatRecordingTime(seconds: int) -> str {
     minutes: int = seconds // 60;
     remaining: int = seconds % 60;
@@ -30,10 +29,7 @@ def:pub imageSizeAllowed(file_size: int) -> bool {
 }
 
 
-def:pub decisionFor(
-    decisions: dict[str, str],
-    candidate_id: str
-) -> str {
+def:pub decisionFor(decisions: dict[str, str], candidate_id: str) -> str {
     if candidate_id in decisions {
         return decisions[candidate_id];
     }
@@ -42,10 +38,7 @@ def:pub decisionFor(
 
 
 def:pub candidateSourceId(candidate: dict[str, any]) -> str {
-    if (
-        "source_chunk_id" in candidate
-        and len(candidate["source_chunk_id"]) > 0
-    ) {
+    if ("source_chunk_id" in candidate and len(candidate["source_chunk_id"]) > 0) {
         return candidate["source_chunk_id"];
     } elif (
         "source_text_block_id" in candidate
@@ -58,8 +51,7 @@ def:pub candidateSourceId(candidate: dict[str, any]) -> str {
 
 
 def:pub acceptedCandidates(
-    candidates: list[dict[str, any]],
-    decisions: dict[str, str]
+    candidates: list[dict[str, any]], decisions: dict[str, str]
 ) -> list[dict[str, any]] {
     accepted: list[dict[str, any]] = [];
     for candidate in candidates {
@@ -72,9 +64,7 @@ def:pub acceptedCandidates(
 
 
 def:pub candidatesForGroup(
-    candidates: list[dict[str, any]],
-    decisions: dict[str, str],
-    group_name: str
+    candidates: list[dict[str, any]], decisions: dict[str, str], group_name: str
 ) -> list[dict[str, any]] {
     grouped: list[dict[str, any]] = [];
     for candidate in acceptedCandidates(candidates, decisions) {
@@ -93,7 +83,11 @@ def:pub candidatesForGroup(
             grouped.append(candidate);
         } elif (
             group_name == "instructions"
-            and category in ["medication", "medication_instruction", "clinician_instruction"]
+            and category in [
+                "medication",
+                "medication_instruction",
+                "clinician_instruction"
+            ]
         ) {
             grouped.append(candidate);
         } elif group_name == "labs" and category == "lab_order" {
@@ -109,8 +103,7 @@ def:pub candidatesForGroup(
 
 
 def:pub uniqueAcceptedSourceCount(
-    candidates: list[dict[str, any]],
-    decisions: dict[str, str]
+    candidates: list[dict[str, any]], decisions: dict[str, str]
 ) -> int {
     source_ids: list[str] = [];
     for candidate in acceptedCandidates(candidates, decisions) {
@@ -124,8 +117,7 @@ def:pub uniqueAcceptedSourceCount(
 
 
 def:pub hasAcceptedConflict(
-    candidates: list[dict[str, any]],
-    decisions: dict[str, str]
+    candidates: list[dict[str, any]], decisions: dict[str, str]
 ) -> bool {
     follow_up_values: list[str] = [];
     for candidate in acceptedCandidates(candidates, decisions) {
@@ -140,8 +132,7 @@ def:pub hasAcceptedConflict(
 
 
 def:pub unresolvedCandidateCount(
-    candidates: list[dict[str, any]],
-    decisions: dict[str, str]
+    candidates: list[dict[str, any]], decisions: dict[str, str]
 ) -> int {
     count: int = 0;
     for candidate in candidates {
@@ -158,17 +149,11 @@ def:pub sourceTargetId(source_id: str) -> str {
 }
 
 
-def:pub voiceCanStart(
-    permission_requesting: bool,
-    recording_active: bool
-) -> bool {
+def:pub voiceCanStart(permission_requesting: bool, recording_active: bool) -> bool {
     return not permission_requesting and not recording_active;
 }
 
 
-def:pub documentCanAnalyze(
-    has_preview: bool,
-    is_processing: bool
-) -> bool {
+def:pub documentCanAnalyze(has_preview: bool, is_processing: bool) -> bool {
     return has_preview and not is_processing;
 }

@@ -1,12 +1,11 @@
 """Frontend-only navigation between implemented Hospi-Pet screens."""
 
-
-def:pub VerificationNavigation(
-    can_continue: bool,
-    on_continue: any
-) -> JsxElement {
+def:pub VerificationNavigation(can_continue: bool, on_continue: any) -> JsxElement {
     return
-        <nav className="workflow-navigation workflow-navigation--verification" aria-label="Screen navigation">
+        <nav
+            className="workflow-navigation workflow-navigation--verification"
+            aria-label="Screen navigation"
+        >
             <div>
                 <p>Next step</p>
                 <span>Review accepted facts and identify missing information.</span>
@@ -24,9 +23,7 @@ def:pub VerificationNavigation(
 
 
 def:pub InsightsNavigation(
-    can_continue: bool,
-    on_back: any,
-    on_continue: any
+    can_continue: bool, on_back: any, on_continue: any
 ) -> JsxElement {
     return
         <nav className="workflow-navigation" aria-label="Screen navigation">
@@ -37,7 +34,6 @@ def:pub InsightsNavigation(
             >
                 Back to Verification
             </button>
-
             <div className="workflow-navigation__future">
                 <button
                     className="button button--primary"
@@ -51,8 +47,8 @@ def:pub InsightsNavigation(
                 <span id="results-status">
                     {(
                         "Open the backend-supported review"
-                        if can_continue else
-                        "Accept encounter evidence to continue"
+                            if can_continue
+                            else "Accept encounter evidence to continue"
                     )}
                 </span>
             </div>
@@ -70,7 +66,6 @@ def:pub ResultsNavigation(on_back: any) -> JsxElement {
             >
                 Back to Clinical Insights
             </button>
-
             <div className="workflow-navigation__future">
                 <button
                     className="button button--primary"

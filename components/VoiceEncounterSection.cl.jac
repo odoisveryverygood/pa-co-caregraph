@@ -24,28 +24,30 @@ def:pub VoiceEncounterSection(
 ) -> JsxElement {
     can_start: bool = voiceCanStart(is_requesting, is_recording);
     has_voice_content: bool = (
-        is_recording
-        or is_prepared_demo
-        or transcription_status == "completed"
+        is_recording or is_prepared_demo or transcription_status == "completed"
     );
     status_label: str = transcription_status.replace("_", " ");
 
     return
-        <section className="panel multimodal-panel voice-panel" aria-labelledby="voice-heading">
+        <section
+            className="panel multimodal-panel voice-panel"
+            aria-labelledby="voice-heading"
+        >
             <div className="section-heading">
                 <div>
                     <p className="eyebrow">Multimodal input</p>
                     <h2 id="voice-heading">Voice Encounter</h2>
                 </div>
                 <span
-                    className={"section-chip " + ("section-chip--active" if is_recording else "")}
+                    className={"section-chip " + (
+                        "section-chip--active" if is_recording else ""
+                    )}
                     role="status"
                     aria-live="polite"
                 >
                     {status_label}
                 </span>
             </div>
-
             <div className="multimodal-toolbar">
                 <div className="multimodal-toolbar__primary">
                     <button
@@ -55,7 +57,11 @@ def:pub VoiceEncounterSection(
                         aria-busy={is_requesting}
                         onClick={on_start}
                     >
-                        {("Requesting microphone…" if is_requesting else "Start Recording")}
+                        {(
+                            "Requesting microphone…"
+                                if is_requesting
+                                else "Start Recording"
+                        )}
                     </button>
                     <button
                         className="button button--secondary"
@@ -66,12 +72,21 @@ def:pub VoiceEncounterSection(
                     >
                         {("Stopping…" if is_stopping else "Stop Recording")}
                     </button>
-                    <div className="recording-timer" aria-label={"Recording time " + formatRecordingTime(recording_seconds)}>
-                        <span className={"recording-timer__dot " + ("recording-timer__dot--active" if is_recording else "")} aria-hidden="true"></span>
+                    <div
+                        className="recording-timer"
+                        aria-label={"Recording time " + formatRecordingTime(
+                            recording_seconds
+                        )}
+                    >
+                        <span
+                            className={"recording-timer__dot " + (
+                                "recording-timer__dot--active" if is_recording else ""
+                            )}
+                            aria-hidden="true"
+                        ></span>
                         <time>{formatRecordingTime(recording_seconds)}</time>
                     </div>
                 </div>
-
                 <label className="scenario-control">
                     <span>Current speaker</span>
                     <select
@@ -84,7 +99,6 @@ def:pub VoiceEncounterSection(
                         <option value="Patient">Patient</option>
                     </select>
                 </label>
-
                 <label className="scenario-control">
                     <span>Demo path</span>
                     <select
@@ -99,16 +113,14 @@ def:pub VoiceEncounterSection(
                     </select>
                 </label>
             </div>
-
             {(
                 <div className="voice-interim" role="status" aria-live="polite">
                     <span>{speaker} · Interim</span>
                     <p>{interim_text}</p>
                 </div>
-                if len(interim_text) > 0 else
-                None
+                    if len(interim_text) > 0
+                    else None
             )}
-
             <div className="status-grid">
                 <div>
                     <span>Microphone permission</span>
@@ -123,38 +135,49 @@ def:pub VoiceEncounterSection(
                     <strong>Local browser only</strong>
                 </div>
             </div>
-
             {(
                 <p className="prepared-label" role="status">
                     Prepared demo · no microphone recording occurred
                 </p>
-                if is_prepared_demo else
-                None
+                    if is_prepared_demo
+                    else None
             )}
-
             {(
-                <div className="permission-message permission-message--error" role="alert">
+                <div
+                    className="permission-message permission-message--error"
+                    role="alert"
+                >
                     <strong>Microphone access was denied.</strong>
-                    <p>Enable microphone access in the browser, try again, or load the prepared voice demo.</p>
+                    <p>
+                        Enable microphone access in the browser, try again, or load the prepared voice demo.
+                    </p>
                 </div>
-                if permission_state == "denied" else
-                (
-                    <div className="permission-message" role="status">
-                        <strong>Microphone recording is unavailable in this browser.</strong>
-                        <p>The prepared voice demo remains available.</p>
-                    </div>
-                    if permission_state == "unsupported" else
-                    (
-                        <div className="permission-message permission-message--error" role="alert">
-                            <strong>The microphone request did not complete.</strong>
-                            <p>This is a recoverable demo state. Try again or use prepared content.</p>
+                    if permission_state == "denied"
+                    else (
+                        <div className="permission-message" role="status">
+                            <strong>
+                                Microphone recording is unavailable in this browser.
+                            </strong>
+                            <p>The prepared voice demo remains available.</p>
                         </div>
-                        if permission_state == "recoverable_error" else
-                        None
+                            if permission_state == "unsupported"
+                            else (
+                                <div
+                                    className="permission-message permission-message--error"
+                                    role="alert"
+                                >
+                                    <strong>
+                                        The microphone request did not complete.
+                                    </strong>
+                                    <p>
+                                        This is a recoverable demo state. Try again or use prepared content.
+                                    </p>
+                                </div>
+                                    if permission_state == "recoverable_error"
+                                    else None
+                            )
                     )
-                )
             )}
-
             <div className="multimodal-secondary-actions">
                 <button
                     className="button button--secondary"
@@ -175,17 +198,15 @@ def:pub VoiceEncounterSection(
                 <button
                     className="text-button"
                     type="button"
-                    disabled={not has_voice_content and permission_state == "not_requested"}
+                    disabled={not has_voice_content
+                    and permission_state == "not_requested"}
                     onClick={on_discard}
                 >
                     Discard Recording
                 </button>
             </div>
-
             <p className="panel-footnote">
-                Browser speech recognition keeps interim text local. Only final,
-                nonblank transcript chunks are sent to the documented Jac action;
-                raw microphone audio is never uploaded.
+                Browser speech recognition keeps interim text local. Only final, nonblank transcript chunks are sent to the documented Jac action; raw microphone audio is never uploaded.
             </p>
         </section>;
 }

@@ -10,18 +10,6 @@ import "./styles/results.css";
 import "./styles/intelligence.css";
 
 import from .api.backend { callBackendAction, callDocumentIngest }
-import from .mock_data.multimodal {
-    PREPARED_VOICE_CANDIDATES,
-    PREPARED_VOICE_TRANSCRIPT,
-    SOURCE_METADATA,
-    documentResponse,
-    preparedVoiceResponse
-}
-import from .mock_data.intelligence {
-    PREPARED_PATIENT,
-    clinicianNoteFixture,
-    intelligenceFixture
-}
 import from .components.Header { Header }
 import from .components.EncounterWelcome { EncounterWelcome }
 import from .components.PatientHeader { PatientHeader }
@@ -45,16 +33,12 @@ import from .components.IntelligenceState {
 }
 import from .components.ProjectFooter { ProjectFooter }
 import from .components.Screen1State {
-    blankConditionDecisions,
     blankFactDecisions,
-    blankQuestionDecisions,
     canContinueToInsights,
     canLoadDemo,
     sequenceDelayForState,
     statusForState,
-    updateConditionDecision,
-    updateFactDecision,
-    updateQuestionDecision
+    updateFactDecision
 }
 
 
@@ -82,8 +66,6 @@ def:pub app -> JsxElement {
         fact_decisions: dict[str, str] = blankFactDecisions(),
         pending_fact_id: str = "",
         pending_fact_decision: str = "",
-        condition_decisions: dict[str, str] = blankConditionDecisions(),
-        question_decisions: dict[str, str] = blankQuestionDecisions(),
         insights_preparing: bool = False,
         mascot_message_visible: bool = False,
         sequence_timer: float | None = None,
@@ -135,7 +117,6 @@ def:pub app -> JsxElement {
         result_status: str = "missing",
         result_data: dict[str, any] = {},
         result_timer: float | None = None,
-        intelligence_scenario: str = "success",
         translation_status: str = "empty",
         translation_chunk_index: int = 0,
         translated_rows: list[dict[str, any]] = [],
@@ -154,6 +135,15 @@ def:pub app -> JsxElement {
         active_intelligence_tab: str = "summary",
         source_trace_status: str = "empty",
         source_trace_data: list[dict[str, any]] = [],
+        care_gap_status: str = "empty",
+        care_gaps: list[dict[str, any]] = [],
+        patient_plan_status: str = "empty",
+        english_patient_plan: dict[str, any] = {},
+        spanish_patient_plan: dict[str, any] = {},
+        patient_audio_status: str = "empty",
+        patient_audio_script: dict[str, any] = {},
+        audit_status: str = "empty",
+        audit_conflicts: list[dict[str, any]] = [],
         final_review_status: str = "empty",
         final_review_data: dict[str, any] = {},
         intelligence_error_message: str = "",
@@ -175,11 +165,8 @@ def:pub app -> JsxElement {
     def acceptFact(fact_id: str) -> None;
     def rejectFact(fact_id: str) -> None;
     def verifyFact(fact_id: str, decision: str) -> None;
-    def receiveFactDecision(response: any) -> None;
+    def receiveFactDecision(response: any, fact_id: str, decision: str) -> None;
     def failFactDecision(error: any) -> None;
-    def reviewCondition(condition_id: str) -> None;
-    def markConditionNotRelevant(condition_id: str) -> None;
-    def setQuestionStatus(question_id: str, status: str) -> None;
     def continueToInsights -> None;
     def backToVerification -> None;
     def continueToResults -> None;
@@ -187,16 +174,17 @@ def:pub app -> JsxElement {
     def retryResult -> None;
     def backToInsights -> None;
     def cancelResultTimer -> None;
-    def changeIntelligenceScenario(e: any) -> None;
     def loadTranslations -> None;
-    def translateNextChunk -> None;
-    def receiveTranslationChunk(response: any) -> None;
+    def translateChunkAt(index: int, rows: list[dict[str, any]]) -> None;
+    def receiveTranslationChunk(
+        response: any, index: int, rows: list[dict[str, any]]
+    ) -> None;
     def generateQuickNote -> None;
     def analyzeAcceptedInformation -> None;
     def loadAnalysisTrace -> None;
     def prepareFinalReview -> None;
     def finishIntelligenceAction -> None;
-    def receiveIntelligenceResponse(response: any) -> None;
+    def receiveIntelligenceResponse(response: any, action: str) -> None;
     def failIntelligenceAction(error: any) -> None;
     def cancelIntelligenceTimer -> None;
     def resetIntelligence -> None;
@@ -204,8 +192,22 @@ def:pub app -> JsxElement {
     def dismissIntelligenceQuestion(question_id: str) -> None;
     def answerIntelligenceQuestion(question_id: str) -> None;
     def finishIntelligenceQuestionAction -> None;
-    def receiveQuestionResponse(response: any) -> None;
+    def receiveQuestionResponse(response: any, question_id: str) -> None;
     def receiveGeneratedQuestions(response: any) -> None;
+    def checkCareGaps -> None;
+    def receiveCareGaps(response: any) -> None;
+    def resolveFirstGap -> None;
+    def receiveGapResolution(response: any) -> None;
+    def generatePatientPlans -> None;
+    def receiveEnglishPatientPlan(response: any) -> None;
+    def receiveSpanishPatientPlan(response: any) -> None;
+    def generatePatientAudio -> None;
+    def receivePatientAudio(response: any) -> None;
+    def playPatientAudio -> None;
+    def runEvidenceAudit -> None;
+    def receiveEvidenceAudit(response: any) -> None;
+    def addDemoContradiction -> None;
+    def receiveDemoContradiction(response: any) -> None;
     def toggleIntelligenceQuestionDetail(question_id: str, mode: str) -> None;
     def changeVoiceScenario(e: any) -> None;
     def changeVoiceSpeaker(e: any) -> None;
@@ -231,6 +233,8 @@ def:pub app -> JsxElement {
     def finishStopRecording -> None;
     def receiveCaptureFinalized(response: any) -> None;
     def loadPreparedVoiceDemo -> None;
+    def receivePreparedDemoReset(response: any) -> None;
+    def receivePreparedEncounter(response: any) -> None;
     def finishPreparedVoiceDemo -> None;
     def receivePreparedVoiceDemo(response: any) -> None;
     def failPreparedVoiceDemo(error: any) -> None;
@@ -242,6 +246,7 @@ def:pub app -> JsxElement {
     def openCamera -> None;
     def cameraPermissionGranted(stream: any) -> None;
     def cameraPermissionFailed(error: any) -> None;
+    def cameraPermissionTimedOut -> None;
     def attachCameraStream -> None;
     def handleDocumentUpload(e: any) -> None;
     def takePhoto -> None;
@@ -252,6 +257,8 @@ def:pub app -> JsxElement {
     def advanceDocumentStage -> None;
     def finishDocumentAnalysis -> None;
     def receiveDocumentAnalysis(response: any) -> None;
+    def refreshDocumentExtraction -> None;
+    def receiveDocumentExtraction(response: any) -> None;
     def failDocumentAnalysis(error: any) -> None;
     def cancelDocumentTimer -> None;
     def stopCameraCapture -> None;
@@ -265,7 +272,7 @@ def:pub app -> JsxElement {
     def saveClinicianNoteSection(section_key: str) -> None;
     def approveClinicianNote -> None;
     def finishClinicianNoteAction -> None;
-    def receiveClinicianNoteResponse(response: any) -> None;
+    def receiveClinicianNoteResponse(response: any, action: str) -> None;
     def failClinicianNoteAction(error: any) -> None;
     def cancelClinicianNoteTimer -> None;
 
@@ -302,19 +309,18 @@ def:pub app -> JsxElement {
             <Header
                 screen_label={(
                     "Live Encounter"
-                    if current_screen == "verification" else
-                    (
-                        "Clinical Insights"
-                        if current_screen == "insights" else
-                        "Verified Encounter Review"
-                    )
+                        if current_screen == "verification"
+                        else (
+                            "Clinical Insights"
+                                if current_screen == "insights"
+                                else "Verified Encounter Review"
+                        )
                 )}
                 load_demo={loadDemo}
                 reset_demo={resetDemo}
                 demo_loaded={demo_loaded}
                 is_transitioning={multimodal_busy}
             />
-
             <main className="main-content">
                 {(
                     <div className="screen-one">
@@ -328,7 +334,6 @@ def:pub app -> JsxElement {
                             is_transitioning={multimodal_busy}
                             is_running={False}
                         />
-
                         <VoiceEncounterSection
                             permission_state={voice_permission}
                             transcription_status={voice_status}
@@ -348,7 +353,6 @@ def:pub app -> JsxElement {
                             on_prepared_demo={loadPreparedVoiceDemo}
                             on_discard={discardRecording}
                         />
-
                         {(
                             <div className="encounter-loaded">
                                 <PatientHeader patient={patient_data}/>
@@ -361,19 +365,18 @@ def:pub app -> JsxElement {
                                     interim_speaker={voice_speaker}
                                 />
                             </div>
-                            if demo_loaded else
-                            <div className="encounter-empty">
-                                <TranscriptPanel
-                                    messages={transcript_data}
-                                    highlighted_source_id={highlighted_source_id}
-                                    transcription_status={voice_status}
-                                    is_prepared_demo={voice_prepared_demo}
-                                    interim_text={voice_interim_text}
-                                    interim_speaker={voice_speaker}
-                                />
-                            </div>
+                                if demo_loaded
+                                else <div className="encounter-empty">
+                                    <TranscriptPanel
+                                        messages={transcript_data}
+                                        highlighted_source_id={highlighted_source_id}
+                                        transcription_status={voice_status}
+                                        is_prepared_demo={voice_prepared_demo}
+                                        interim_text={voice_interim_text}
+                                        interim_speaker={voice_speaker}
+                                    />
+                                </div>
                         )}
-
                         <LiveConsultation
                             rows={translated_rows}
                             status={translation_status}
@@ -381,14 +384,12 @@ def:pub app -> JsxElement {
                             pending_action={intelligence_pending_action}
                             on_load={loadTranslations}
                         />
-
                         <AIQuickNote
                             note={quick_note_data}
                             status={quick_note_status}
                             pending_action={intelligence_pending_action}
                             on_generate={generateQuickNote}
                         />
-
                         <DocumentCaptureSection
                             permission_state={document_permission}
                             source_type={document_source_type}
@@ -411,7 +412,6 @@ def:pub app -> JsxElement {
                             on_retake={retakeDocument}
                             on_analyze={analyzeDocument}
                         />
-
                         <ClinicianVerification
                             candidates={all_candidates}
                             decisions={fact_decisions}
@@ -420,7 +420,6 @@ def:pub app -> JsxElement {
                             on_accept={acceptFact}
                             on_reject={rejectFact}
                         />
-
                         <ClinicianNoteEditor
                             note={clinician_note_data}
                             status={note_status}
@@ -436,7 +435,6 @@ def:pub app -> JsxElement {
                             on_approve={approveClinicianNote}
                             on_trace={traceSource}
                         />
-
                         <VerifiedIntelligence
                             status={analysis_status}
                             analysis={analysis_data}
@@ -450,20 +448,33 @@ def:pub app -> JsxElement {
                             detail_question_id={detail_question_id}
                             detail_mode={detail_mode}
                             active_tab={active_intelligence_tab}
-                            scenario={intelligence_scenario}
                             stale={analysis_stale}
                             can_analyze={acceptedCandidateCount(fact_decisions) > 0}
                             pending_action={intelligence_pending_action}
                             error_message={intelligence_error_message}
-                            on_scenario_change={changeIntelligenceScenario}
                             on_analyze={analyzeAcceptedInformation}
                             on_tab={setIntelligenceTab}
                             on_trace={loadAnalysisTrace}
                             on_dismiss_question={dismissIntelligenceQuestion}
                             on_answer_question={answerIntelligenceQuestion}
                             on_question_detail={toggleIntelligenceQuestionDetail}
+                            care_gap_status={care_gap_status}
+                            care_gaps={care_gaps}
+                            patient_plan_status={patient_plan_status}
+                            english_patient_plan={english_patient_plan}
+                            spanish_patient_plan={spanish_patient_plan}
+                            patient_audio_status={patient_audio_status}
+                            patient_audio_script={patient_audio_script}
+                            audit_status={audit_status}
+                            audit_conflicts={audit_conflicts}
+                            on_check_gaps={checkCareGaps}
+                            on_resolve_gap={resolveFirstGap}
+                            on_generate_plans={generatePatientPlans}
+                            on_generate_audio={generatePatientAudio}
+                            on_play_audio={playPatientAudio}
+                            on_run_audit={runEvidenceAudit}
+                            on_add_contradiction={addDemoContradiction}
                         />
-
                         <FinalReview
                             packet={final_review_data}
                             status={final_review_status}
@@ -474,44 +485,43 @@ def:pub app -> JsxElement {
                         />
                         <VerificationNavigation
                             can_continue={canContinueToInsights(
-                                demo_loaded,
-                                multimodal_busy,
-                                len(all_candidates) > 0
+                                demo_loaded, multimodal_busy, len(all_candidates) > 0
                             )}
                             on_continue={continueToInsights}
                         />
                     </div>
-                    if current_screen == "verification" else
-                    <ClinicalInsightsScreen
-                        patient={patient_data}
-                        facts={all_candidates}
-                        decisions={fact_decisions}
-                        condition_decisions={condition_decisions}
-                        question_decisions={question_decisions}
-                        insights_preparing={insights_preparing}
-                        message_visible={mascot_message_visible}
-                        on_mascot_activate={activateAssistant}
-                        on_condition_review={reviewCondition}
-                        on_condition_not_relevant={markConditionNotRelevant}
-                        on_question_status={setQuestionStatus}
-                        on_back={backToVerification}
-                        on_continue={continueToResults}
-                    />
-                    if current_screen == "insights" else
-                    <ResultsScreen
-                        patient={patient_data}
-                        packet_status={final_review_status}
-                        packet={final_review_data}
-                        analysis={analysis_data}
-                        stale={analysis_stale}
-                        message_visible={mascot_message_visible}
-                        on_mascot_activate={activateAssistant}
-                        on_back={backToInsights}
-                        on_generate={prepareFinalReview}
-                    />
+                        if current_screen == "verification"
+                        else <ClinicalInsightsScreen
+                            patient={patient_data}
+                            facts={all_candidates}
+                            decisions={fact_decisions}
+                            insights_preparing={insights_preparing}
+                            message_visible={mascot_message_visible}
+                            on_mascot_activate={activateAssistant}
+                            on_back={backToVerification}
+                            on_continue={continueToResults}
+                        />
+                            if current_screen == "insights"
+                            else <ResultsScreen
+                                patient={patient_data}
+                                packet_status={final_review_status}
+                                packet={final_review_data}
+                                analysis={analysis_data}
+                                clinician_note={clinician_note_data}
+                                english_plan={english_patient_plan}
+                                spanish_plan={spanish_patient_plan}
+                                source_trace={source_trace_data}
+                                questions={intelligence_questions}
+                                care_gaps={care_gaps}
+                                conflicts={audit_conflicts}
+                                stale={analysis_stale}
+                                message_visible={mascot_message_visible}
+                                on_mascot_activate={activateAssistant}
+                                on_back={backToInsights}
+                                on_generate={prepareFinalReview}
+                            />
                 )}
             </main>
-
             <ProjectFooter/>
         </div>;
 }

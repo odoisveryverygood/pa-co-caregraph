@@ -1,6 +1,5 @@
 """Synthetic patient and encounter context for Screen 1."""
 
-
 def:pub PatientHeader(patient: dict[str, str]) -> JsxElement {
     return
         <section className="patient-header" aria-labelledby="patient-heading">
@@ -8,7 +7,10 @@ def:pub PatientHeader(patient: dict[str, str]) -> JsxElement {
                 <div className="patient-header__context">
                     <p className="eyebrow">Current encounter</p>
                     <div className="review-ready" role="status">
-                        <span className="status-dot status-dot--ready" aria-hidden="true"></span>
+                        <span
+                            className="status-dot status-dot--ready"
+                            aria-hidden="true"
+                        ></span>
                         <span>{patient["review_status"]}</span>
                     </div>
                 </div>
@@ -22,7 +24,6 @@ def:pub PatientHeader(patient: dict[str, str]) -> JsxElement {
                     Fictional patient record for demonstration only
                 </p>
             </div>
-
             <div className="patient-header__details">
                 <dl className="encounter-meta">
                     <div className="encounter-meta__item">

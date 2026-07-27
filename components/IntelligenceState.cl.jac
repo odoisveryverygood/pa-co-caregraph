@@ -1,10 +1,6 @@
 """Pure fixture-state helpers for the intelligence frontend."""
 
-
-def:pub responseUiStatus(
-    response: dict[str, any],
-    payload_field: str
-) -> str {
+def:pub responseUiStatus(response: dict[str, any], payload_field: str) -> str {
     if not response["success"] {
         return "recoverable_error" if response["recoverable"] else "error";
     }
@@ -18,7 +14,8 @@ def:pub responseUiStatus(
     if payload_field not in response or response[payload_field] is None {
         return "empty";
     }
-    if isinstance(response[payload_field], list) and len(response[payload_field]) == 0 {
+    if isinstance(response[payload_field], list)
+    and len(response[payload_field]) == 0 {
         return "empty";
     }
     if (
@@ -32,10 +29,7 @@ def:pub responseUiStatus(
 }
 
 
-def:pub translatedSource(
-    rows: list[dict[str, any]],
-    source_text: str
-) -> str {
+def:pub translatedSource(rows: list[dict[str, any]], source_text: str) -> str {
     for row in rows {
         if row["original_text"] == source_text {
             return row["translated_text"];
@@ -56,14 +50,8 @@ def:pub acceptedCandidateCount(decisions: dict[str, str]) -> int {
 }
 
 
-def:pub analysisBecomesStale(
-    analysis_status: str,
-    decision_changed: bool
-) -> bool {
-    return (
-        decision_changed
-        and analysis_status in ["success", "provider_fallback"]
-    );
+def:pub analysisBecomesStale(analysis_status: str, decision_changed: bool) -> bool {
+    return (decision_changed and analysis_status in ["success", "provider_fallback"]);
 }
 
 

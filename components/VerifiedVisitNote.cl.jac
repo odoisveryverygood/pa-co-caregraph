@@ -28,9 +28,13 @@ def VisitNoteGroup(
                                 <strong>{candidate["value"]}</strong>
                                 <span>
                                     {(
-                                        source_metadata[candidateSourceId(candidate)]["source_label"]
-                                        if candidateSourceId(candidate) in source_metadata else
-                                        "Source unavailable"
+                                        source_metadata[candidateSourceId(candidate)][
+                                            "source_label"
+                                        ]
+                                            if candidateSourceId(
+                                                candidate
+                                            ) in source_metadata
+                                            else "Source unavailable"
                                     )}
                                 </span>
                             </div>
@@ -42,19 +46,18 @@ def VisitNoteGroup(
                                 <button
                                     className="trace-button"
                                     type="button"
-                                    onClick={lambda (e: MouseEvent) {
-                                        on_trace(candidateSourceId(candidate));
-                                    }}
+                                    onClick={lambda (e: MouseEvent) { on_trace(
+                                        candidateSourceId(candidate)
+                                    ); }}
                                 >
                                     Trace to Source
                                 </button>
                             </div>
-                        </div>
-                        for candidate in candidates
+                        </div> for candidate in candidates
                     ]}
                 </div>
-                if len(candidates) > 0 else
-                <p className="visit-note__empty">{empty_text}</p>
+                    if len(candidates) > 0
+                    else <p className="visit-note__empty">{empty_text}</p>
             )}
         </section>;
 }
@@ -69,11 +72,19 @@ def:pub VerifiedVisitNote(
     on_trace: any
 ) -> JsxElement {
     accepted: list[dict[str, any]] = acceptedCandidates(candidates, decisions);
-    concerns: list[dict[str, any]] = candidatesForGroup(candidates, decisions, "concerns");
-    instructions: list[dict[str, any]] = candidatesForGroup(candidates, decisions, "instructions");
+    concerns: list[dict[str, any]] = candidatesForGroup(
+        candidates, decisions, "concerns"
+    );
+    instructions: list[dict[str, any]] = candidatesForGroup(
+        candidates, decisions, "instructions"
+    );
     labs: list[dict[str, any]] = candidatesForGroup(candidates, decisions, "labs");
-    referrals: list[dict[str, any]] = candidatesForGroup(candidates, decisions, "referrals");
-    follow_up: list[dict[str, any]] = candidatesForGroup(candidates, decisions, "follow_up");
+    referrals: list[dict[str, any]] = candidatesForGroup(
+        candidates, decisions, "referrals"
+    );
+    follow_up: list[dict[str, any]] = candidatesForGroup(
+        candidates, decisions, "follow_up"
+    );
     source_count: int = uniqueAcceptedSourceCount(candidates, decisions);
     unresolved_count: int = unresolvedCandidateCount(candidates, decisions);
     has_conflict: bool = hasAcceptedConflict(candidates, decisions);
@@ -91,12 +102,9 @@ def:pub VerifiedVisitNote(
                 </div>
                 <span className="review-required">Clinician review required</span>
             </div>
-
             <p className="visit-note__disclaimer">
-                Hospi-Pet organizes candidate information. A clinician must
-                verify the final visit note.
+                Hospi-Pet organizes candidate information. A clinician must verify the final visit note.
             </p>
-
             <div className="visit-note__summary">
                 <div>
                     <span>Accepted items</span>
@@ -111,101 +119,111 @@ def:pub VerifiedVisitNote(
                     <strong>{unresolved_count}</strong>
                 </div>
             </div>
-
             {(
-                <div className="note-status note-status--loading" role="status" aria-live="polite">
+                <div
+                    className="note-status note-status--loading"
+                    role="status"
+                    aria-live="polite"
+                >
                     Organizing the accepted details…
                 </div>
-                if note_status == "loading" else
-                (
-                    <div className="note-status note-status--error" role="alert">
-                        <strong>Visit-note preview could not be refreshed.</strong>
-                        <span>{note_error}</span>
-                    </div>
-                    if note_status == "recoverable_error" else
-                    None
-                )
+                    if note_status == "loading"
+                    else (
+                        <div className="note-status note-status--error" role="alert">
+                            <strong>Visit-note preview could not be refreshed.</strong>
+                            <span>{note_error}</span>
+                        </div>
+                            if note_status == "recoverable_error"
+                            else None
+                    )
             )}
-
             {(
                 <div className="visit-note__empty-state">
                     <h3>No verified details yet</h3>
-                    <p>Accept a candidate to add it to this clinician-review preview.</p>
+                    <p>
+                        Accept a candidate to add it to this clinician-review preview.
+                    </p>
                 </div>
-                if len(accepted) == 0 else
-                <div className="visit-note__document">
-                    <VisitNoteGroup
-                        title="Patient-stated concerns"
-                        empty_text="No patient-stated concerns have been accepted."
-                        candidates={concerns}
-                        source_metadata={source_metadata}
-                        on_trace={on_trace}
-                    />
-                    <VisitNoteGroup
-                        title="Confirmed instructions"
-                        empty_text="No clinician instructions have been accepted."
-                        candidates={instructions}
-                        source_metadata={source_metadata}
-                        on_trace={on_trace}
-                    />
-                    <VisitNoteGroup
-                        title="Laboratory orders"
-                        empty_text="No laboratory orders have been accepted."
-                        candidates={labs}
-                        source_metadata={source_metadata}
-                        on_trace={on_trace}
-                    />
-                    <VisitNoteGroup
-                        title="Referrals"
-                        empty_text="No referrals have been accepted."
-                        candidates={referrals}
-                        source_metadata={source_metadata}
-                        on_trace={on_trace}
-                    />
-                    <VisitNoteGroup
-                        title="Follow-up"
-                        empty_text="No follow-up information has been accepted."
-                        candidates={follow_up}
-                        source_metadata={source_metadata}
-                        on_trace={on_trace}
-                    />
-                </div>
+                    if len(accepted) == 0
+                    else <div className="visit-note__document">
+                        <VisitNoteGroup
+                            title="Patient-stated concerns"
+                            empty_text="No patient-stated concerns have been accepted."
+                            candidates={concerns}
+                            source_metadata={source_metadata}
+                            on_trace={on_trace}
+                        />
+                        <VisitNoteGroup
+                            title="Confirmed instructions"
+                            empty_text="No clinician instructions have been accepted."
+                            candidates={instructions}
+                            source_metadata={source_metadata}
+                            on_trace={on_trace}
+                        />
+                        <VisitNoteGroup
+                            title="Laboratory orders"
+                            empty_text="No laboratory orders have been accepted."
+                            candidates={labs}
+                            source_metadata={source_metadata}
+                            on_trace={on_trace}
+                        />
+                        <VisitNoteGroup
+                            title="Referrals"
+                            empty_text="No referrals have been accepted."
+                            candidates={referrals}
+                            source_metadata={source_metadata}
+                            on_trace={on_trace}
+                        />
+                        <VisitNoteGroup
+                            title="Follow-up"
+                            empty_text="No follow-up information has been accepted."
+                            candidates={follow_up}
+                            source_metadata={source_metadata}
+                            on_trace={on_trace}
+                        />
+                    </div>
             )}
-
             <section className="visit-note__gaps" aria-labelledby="gaps-heading">
                 <h3 id="gaps-heading">Outstanding gaps</h3>
                 <ul>
                     {(
                         <li className="gap-item gap-item--conflict">
                             <strong>Conflicting sources require review</strong>
-                            <span>Accepted follow-up values differ; neither source was selected automatically.</span>
+                            <span>
+                                Accepted follow-up values differ; neither source was selected automatically.
+                            </span>
                         </li>
-                        if has_conflict else
-                        None
-                    )}
-                    {(
+                            if has_conflict
+                            else None
+                    )}{(
                         <li>
-                            <strong>{str(unresolved_count) + " candidate" + ("" if unresolved_count == 1 else "s") + " still require a decision"}</strong>
-                            <span>Accept or reject each item before treating the note as complete.</span>
+                            <strong>
+                                {str(unresolved_count) + " candidate" + (
+                                    "" if unresolved_count == 1 else "s"
+                                ) + " still require a decision"}
+                            </strong>
+                            <span>
+                                Accept or reject each item before treating the note as complete.
+                            </span>
                         </li>
-                        if unresolved_count > 0 else
-                        None
-                    )}
-                    {(
+                            if unresolved_count > 0
+                            else None
+                    )}{(
                         <li>
                             <strong>Follow-up timeframe was not verified</strong>
                             <span>No accepted follow-up source is available.</span>
                         </li>
-                        if len(follow_up) == 0 else
-                        None
-                    )}
-                    {(
+                            if len(follow_up) == 0
+                            else None
+                    )}{(
                         <li>
                             <strong>Medication name requires confirmation</strong>
-                            <span>The contract demo preserves the instruction without inventing a medication name.</span>
+                            <span>
+                                The contract demo preserves the instruction without inventing a medication name.
+                            </span>
                         </li>
-                        if len(instructions) > 0 else
-                        None
+                            if len(instructions) > 0
+                            else None
                     )}
                 </ul>
             </section>

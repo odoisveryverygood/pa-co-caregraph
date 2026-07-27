@@ -4,14 +4,12 @@ import from .Screen1State { canResetDemo }
 
 
 def:pub DemoControls(
-    load_demo: any,
-    reset_demo: any,
-    demo_loaded: bool,
-    is_transitioning: bool
+    load_demo: any, reset_demo: any, demo_loaded: bool, is_transitioning: bool
 ) -> JsxElement {
     load_label: str = (
-        "Loading Demo…" if is_transitioning
-        else ("Demo Loaded" if demo_loaded else "Load Demo")
+        "Loading Demo…"
+            if is_transitioning
+            else ("Demo Loaded" if demo_loaded else "Load Demo")
     );
     reset_disabled: bool = not canResetDemo(demo_loaded, is_transitioning);
 

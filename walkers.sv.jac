@@ -3125,35 +3125,37 @@ walker ResetDemoWalker(TraceableWalker) {
             disengage;
         }
         sessions: list[DemoSession] = [root->:HasSession:->[?:DemoSession, id==self.session_id]];
-        for session in sessions {
-            if not session.synthetic {
+        fresh: DemoSession;
+        if sessions {
+            fresh = sessions[0];
+            if not fresh.synthetic {
                 report failure_response(
                     "NON_SYNTHETIC_SESSION",
                     "ResetDemoWalker can reset synthetic sessions only.",
                     False,
-                    session.graph_version
+                    fresh.graph_version
                 );
                 disengage;
             }
             self.trace(
                 "ResetDemoWalker",
-                session.id,
+                fresh.id,
                 "DemoSession",
                 "HasSession",
                 "delete selected synthetic graph",
                 "selected",
                 "Selected only the named synthetic session for reset."
             );
-            owned: list[CareNode] = [session->:SessionOwns:->];
+            owned: list[CareNode] = [fresh->:SessionOwns:->];
             for item in owned {
                 del item;
             }
-            del session;
+        } else {
+            fresh = DemoSession(
+                id=self.session_id, synthetic=True, schema_version=2, graph_version=1
+            );
+            root +>:HasSession():+> fresh;
         }
-        fresh = DemoSession(
-            id=self.session_id, synthetic=True, schema_version=2, graph_version=1
-        );
-        root +>:HasSession():+> fresh;
         seed_session_graph(fresh);
         self.trace(
             "ResetDemoWalker",

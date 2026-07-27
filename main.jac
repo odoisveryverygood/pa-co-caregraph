@@ -80,3 +80,43 @@ import from intelligence_endpoints {
     generate_final_review_packet,
     trace_analysis_item,
 }
+import from walkers {
+    CareGapWalker,
+    ConsultationIngestWalker,
+    EvidenceAuditWalker,
+    GapResolutionWalker,
+    PatientPlanWalker,
+    ResetDemoWalker,
+    VerificationWalker,
+}
+import from multimodal_walkers {
+    AppendTranscriptChunkWalker,
+    ApproveClinicianNoteWalker,
+    CancelCaptureSessionWalker,
+    DocumentIngestWalker,
+    FinalizeCaptureSessionWalker,
+    GenerateClinicianNoteDraftWalker,
+    MultimodalTraceProvenanceWalker,
+    PatientAudioScriptWalker,
+    StartCaptureSessionWalker,
+    UpdateNoteSectionWalker,
+}
+import from intelligence_walkers {
+    ClarifyingQuestionWalker,
+    DismissSuggestedQuestionWalker,
+    FinalReviewPacketWalker,
+    GetTranslatedTranscriptWalker,
+    LiveQuickSummaryWalker,
+    MarkSuggestedQuestionAnsweredWalker,
+    TraceAnalysisItemWalker,
+    TranslateTranscriptChunkWalker,
+    VerifiedEncounterAnalysisWalker,
+}
+
+cl {
+    import from .frontend { app as HospiPetApp }
+
+    def:pub app -> JsxElement {
+        return <HospiPetApp/>;
+    }
+}

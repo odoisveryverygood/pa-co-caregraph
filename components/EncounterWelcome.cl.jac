@@ -1,6 +1,5 @@
 """Polished initial state before a synthetic encounter is loaded."""
 
-
 def:pub EncounterWelcome -> JsxElement {
     return
         <section className="encounter-welcome" aria-labelledby="welcome-heading">
@@ -8,8 +7,7 @@ def:pub EncounterWelcome -> JsxElement {
                 <p className="eyebrow">Hospi-Pet workflow</p>
                 <h1 id="welcome-heading">Live Encounter</h1>
                 <p>
-                    Capture a consultation or synthetic document, then verify
-                    every candidate before it enters the visit-note preview.
+                    Capture a consultation or synthetic document, then verify every candidate before it enters the visit-note preview.
                 </p>
             </div>
             <ol className="welcome-steps" aria-label="Demo workflow">

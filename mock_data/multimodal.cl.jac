@@ -5,172 +5,169 @@ frozen multimodal BackendResponse fields and DTOs without calling or
 duplicating the backend walkers.
 """
 
-
 glob:pub PREPARED_VOICE_TRANSCRIPT: list[dict[str, any]] = [
-    {
-        "id": "chunk-1",
-        "encounter_id": "encounter-maya-001",
-        "capture_session_id": "capture-demo-default-2",
-        "sequence": 1,
-        "speaker": "Doctor",
-        "text": "We will order a blood test to be completed this week.",
-        "started_at": "",
-        "ended_at": "",
-        "confidence": 1.0,
-        "source_type": "prepared_transcript",
-        "finalized": True
-    },
-    {
-        "id": "chunk-2",
-        "encounter_id": "encounter-maya-001",
-        "capture_session_id": "capture-demo-default-2",
-        "sequence": 2,
-        "speaker": "Doctor",
-        "text": "Please return in two weeks so we can review the results.",
-        "started_at": "",
-        "ended_at": "",
-        "confidence": 1.0,
-        "source_type": "prepared_transcript",
-        "finalized": True
-    },
-    {
-        "id": "chunk-3",
-        "encounter_id": "encounter-maya-001",
-        "capture_session_id": "capture-demo-default-2",
-        "sequence": 3,
-        "speaker": "Doctor",
-        "text": "Continue your current medication exactly as it appears on your existing prescription.",
-        "started_at": "",
-        "ended_at": "",
-        "confidence": 1.0,
-        "source_type": "prepared_transcript",
-        "finalized": True
-    },
-    {
-        "id": "chunk-4",
-        "encounter_id": "encounter-maya-001",
-        "capture_session_id": "capture-demo-default-2",
-        "sequence": 4,
-        "speaker": "Doctor",
-        "text": "I am referring you to a community nutrition counselor.",
-        "started_at": "",
-        "ended_at": "",
-        "confidence": 1.0,
-        "source_type": "prepared_transcript",
-        "finalized": True
-    },
-    {
-        "id": "chunk-5",
-        "encounter_id": "encounter-maya-001",
-        "capture_session_id": "capture-demo-default-2",
-        "sequence": 5,
-        "speaker": "Patient",
-        "text": "Can someone explain the instructions to me in Spanish?",
-        "started_at": "",
-        "ended_at": "",
-        "confidence": 1.0,
-        "source_type": "prepared_transcript",
-        "finalized": True
-    }
-];
-
+         {
+             "id": "chunk-1",
+             "encounter_id": "encounter-maya-001",
+             "capture_session_id": "capture-demo-default-2",
+             "sequence": 1,
+             "speaker": "Doctor",
+             "text": "We will order a blood test to be completed this week.",
+             "started_at": "",
+             "ended_at": "",
+             "confidence": 1.0,
+             "source_type": "prepared_transcript",
+             "finalized": True
+         },
+         {
+             "id": "chunk-2",
+             "encounter_id": "encounter-maya-001",
+             "capture_session_id": "capture-demo-default-2",
+             "sequence": 2,
+             "speaker": "Doctor",
+             "text": "Please return in two weeks so we can review the results.",
+             "started_at": "",
+             "ended_at": "",
+             "confidence": 1.0,
+             "source_type": "prepared_transcript",
+             "finalized": True
+         },
+         {
+             "id": "chunk-3",
+             "encounter_id": "encounter-maya-001",
+             "capture_session_id": "capture-demo-default-2",
+             "sequence": 3,
+             "speaker": "Doctor",
+             "text": "Continue your current medication exactly as it appears on your existing prescription.",
+             "started_at": "",
+             "ended_at": "",
+             "confidence": 1.0,
+             "source_type": "prepared_transcript",
+             "finalized": True
+         },
+         {
+             "id": "chunk-4",
+             "encounter_id": "encounter-maya-001",
+             "capture_session_id": "capture-demo-default-2",
+             "sequence": 4,
+             "speaker": "Doctor",
+             "text": "I am referring you to a community nutrition counselor.",
+             "started_at": "",
+             "ended_at": "",
+             "confidence": 1.0,
+             "source_type": "prepared_transcript",
+             "finalized": True
+         },
+         {
+             "id": "chunk-5",
+             "encounter_id": "encounter-maya-001",
+             "capture_session_id": "capture-demo-default-2",
+             "sequence": 5,
+             "speaker": "Patient",
+             "text": "Can someone explain the instructions to me in Spanish?",
+             "started_at": "",
+             "ended_at": "",
+             "confidence": 1.0,
+             "source_type": "prepared_transcript",
+             "finalized": True
+         }
+     ];
 
 glob:pub PREPARED_VOICE_CANDIDATES: list[dict[str, any]] = [
-    {
-        "id": "candidate-lab",
-        "category": "lab_order",
-        "value": "blood test; due this week",
-        "source_chunk_id": "chunk-1",
-        "source_text": "We will order a blood test to be completed this week.",
-        "confidence": 1.0,
-        "status": "pending",
-        "created_at": "2026-07-26T18:00:01Z"
-    },
-    {
-        "id": "candidate-follow-up",
-        "category": "follow_up",
-        "value": "return in two weeks",
-        "source_chunk_id": "chunk-2",
-        "source_text": "Please return in two weeks so we can review the results.",
-        "confidence": 1.0,
-        "status": "pending",
-        "created_at": "2026-07-26T18:00:02Z"
-    },
-    {
-        "id": "candidate-medication",
-        "category": "medication_instruction",
-        "value": "continue existing prescription unchanged",
-        "source_chunk_id": "chunk-3",
-        "source_text": "Continue your current medication exactly as it appears on your existing prescription.",
-        "confidence": 1.0,
-        "status": "pending",
-        "created_at": "2026-07-26T18:00:03Z"
-    },
-    {
-        "id": "candidate-referral",
-        "category": "referral",
-        "value": "community nutrition counselor",
-        "source_chunk_id": "chunk-4",
-        "source_text": "I am referring you to a community nutrition counselor.",
-        "confidence": 1.0,
-        "status": "pending",
-        "created_at": "2026-07-26T18:00:04Z"
-    },
-    {
-        "id": "candidate-language",
-        "category": "language_preference",
-        "value": "Spanish",
-        "source_chunk_id": "chunk-5",
-        "source_text": "Can someone explain the instructions to me in Spanish?",
-        "confidence": 1.0,
-        "status": "pending",
-        "created_at": "2026-07-26T18:00:05Z"
-    }
-];
-
+         {
+             "id": "candidate-lab",
+             "category": "lab_order",
+             "value": "blood test; due this week",
+             "source_chunk_id": "chunk-1",
+             "source_text": "We will order a blood test to be completed this week.",
+             "confidence": 1.0,
+             "status": "pending",
+             "created_at": "2026-07-26T18:00:01Z"
+         },
+         {
+             "id": "candidate-follow-up",
+             "category": "follow_up",
+             "value": "return in two weeks",
+             "source_chunk_id": "chunk-2",
+             "source_text": "Please return in two weeks so we can review the results.",
+             "confidence": 1.0,
+             "status": "pending",
+             "created_at": "2026-07-26T18:00:02Z"
+         },
+         {
+             "id": "candidate-medication",
+             "category": "medication_instruction",
+             "value": "continue existing prescription unchanged",
+             "source_chunk_id": "chunk-3",
+             "source_text": "Continue your current medication exactly as it appears on your existing prescription.",
+             "confidence": 1.0,
+             "status": "pending",
+             "created_at": "2026-07-26T18:00:03Z"
+         },
+         {
+             "id": "candidate-referral",
+             "category": "referral",
+             "value": "community nutrition counselor",
+             "source_chunk_id": "chunk-4",
+             "source_text": "I am referring you to a community nutrition counselor.",
+             "confidence": 1.0,
+             "status": "pending",
+             "created_at": "2026-07-26T18:00:04Z"
+         },
+         {
+             "id": "candidate-language",
+             "category": "language_preference",
+             "value": "Spanish",
+             "source_chunk_id": "chunk-5",
+             "source_text": "Can someone explain the instructions to me in Spanish?",
+             "confidence": 1.0,
+             "status": "pending",
+             "created_at": "2026-07-26T18:00:05Z"
+         }
+     ];
 
 glob:pub SOURCE_METADATA: dict[str, dict[str, str]] = {
-    "chunk-1": {
-        "source_type": "Prepared voice demo",
-        "source_label": "Prepared transcript · line 1",
-        "target_kind": "transcript"
-    },
-    "chunk-2": {
-        "source_type": "Prepared voice demo",
-        "source_label": "Prepared transcript · line 2",
-        "target_kind": "transcript"
-    },
-    "chunk-3": {
-        "source_type": "Prepared voice demo",
-        "source_label": "Prepared transcript · line 3",
-        "target_kind": "transcript"
-    },
-    "chunk-4": {
-        "source_type": "Prepared voice demo",
-        "source_label": "Prepared transcript · line 4",
-        "target_kind": "transcript"
-    },
-    "chunk-5": {
-        "source_type": "Prepared voice demo",
-        "source_label": "Prepared transcript · line 5",
-        "target_kind": "transcript"
-    },
-    "block-demo-default-lab-1": {
-        "source_type": "Synthetic document text block",
-        "source_label": "Lab Order Sheet",
-        "target_kind": "document"
-    },
-    "block-demo-default-referral-1": {
-        "source_type": "Synthetic document text block",
-        "source_label": "Referral Sheet",
-        "target_kind": "document"
-    },
-    "block-demo-default-after-visit-1": {
-        "source_type": "Synthetic document text block",
-        "source_label": "After-Visit Summary",
-        "target_kind": "document"
-    }
-};
+         "chunk-1": {
+             "source_type": "Prepared voice demo",
+             "source_label": "Prepared transcript · line 1",
+             "target_kind": "transcript"
+         },
+         "chunk-2": {
+             "source_type": "Prepared voice demo",
+             "source_label": "Prepared transcript · line 2",
+             "target_kind": "transcript"
+         },
+         "chunk-3": {
+             "source_type": "Prepared voice demo",
+             "source_label": "Prepared transcript · line 3",
+             "target_kind": "transcript"
+         },
+         "chunk-4": {
+             "source_type": "Prepared voice demo",
+             "source_label": "Prepared transcript · line 4",
+             "target_kind": "transcript"
+         },
+         "chunk-5": {
+             "source_type": "Prepared voice demo",
+             "source_label": "Prepared transcript · line 5",
+             "target_kind": "transcript"
+         },
+         "block-demo-default-lab-1": {
+             "source_type": "Synthetic document text block",
+             "source_label": "Lab Order Sheet",
+             "target_kind": "document"
+         },
+         "block-demo-default-referral-1": {
+             "source_type": "Synthetic document text block",
+             "source_label": "Referral Sheet",
+             "target_kind": "document"
+         },
+         "block-demo-default-after-visit-1": {
+             "source_type": "Synthetic document text block",
+             "source_label": "After-Visit Summary",
+             "target_kind": "document"
+         }
+     };
 
 
 def:pub emptyBackendResponse -> dict[str, any] {

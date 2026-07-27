@@ -7,12 +7,14 @@ import from models {
     AIStatusDTO,
     BackendResponse,
     CaptureSession,
+    CaptureSessionStatus,
     ClinicianNoteDraft,
     DemoSession,
     DocumentImage,
     DocumentTextBlock,
     Encounter,
     ExtractionMode,
+    InputSourceType,
     MultimodalCandidateDTO,
     Patient,
     SourceArtifact,
@@ -27,6 +29,7 @@ import from models {
 }
 import from extraction { prepared_transcript, }
 import from walkers {
+    build_demo_state,
     failure_response,
     find_session,
     session_encounter,

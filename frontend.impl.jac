@@ -1,6 +1,5 @@
 """Frontend-only interaction implementations for Hospi-Pet Screen 1."""
 
-
 impl app.loadDemo -> None {
     if not canLoadDemo(demo_loaded, is_transitioning) {
         return;
@@ -18,8 +17,6 @@ impl app.loadDemo -> None {
     fact_decisions = blankFactDecisions();
     pending_fact_id = "";
     pending_fact_decision = "";
-    condition_decisions = blankConditionDecisions();
-    question_decisions = blankQuestionDecisions();
     insights_preparing = False;
     mascot_message_visible = False;
     highlighted_source_id = "";
@@ -34,10 +31,11 @@ impl app.loadDemo -> None {
     assistant_state = "listening";
     assistant_status = "Loading the synthetic encounter";
     assistant_message = "Connecting to the Jac demo session.";
-    callBackendAction(
-        "reset_demo",
-        {"session_id": "hospi-pet-frontend-demo"}
-    ).then(receiveDemoReset).catch(failDemoLoad);
+    callBackendAction("reset_demo", {"session_id": "hospi-pet-frontend-demo"}).then(
+        receiveDemoReset
+    ).catch(
+        failDemoLoad
+    );
 }
 
 
@@ -47,9 +45,12 @@ impl app.receiveDemoReset(response: any) -> None {
         return;
     }
     callBackendAction(
-        "load_demo_encounter",
-        {"session_id": "hospi-pet-frontend-demo"}
-    ).then(receiveDemoEncounter).catch(failDemoLoad);
+        "load_demo_encounter", {"session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        receiveDemoEncounter
+    ).catch(
+        failDemoLoad
+    );
 }
 
 
@@ -85,17 +86,18 @@ impl app.failDemoLoad(error: any) -> None {
     assistant_status = "Jac backend unavailable";
     assistant_message = (
         error["message"]
-        if isinstance(error, dict) and "message" in error else
-        "Start the integrated Jac server or use the labeled prepared voice fallback."
+            if isinstance(error, dict) and "message" in error
+            else "Start the integrated Jac server or use the labeled prepared voice fallback."
     );
 }
 
 impl app.resetDemo -> None {
     if backend_connected {
         callBackendAction(
-            "reset_demo",
-            {"session_id": "hospi-pet-frontend-demo"}
-        ).catch(lambda (error: any) { None; });
+            "reset_demo", {"session_id": "hospi-pet-frontend-demo"}
+        ).catch(
+            lambda (error: any) { None; }
+        );
     }
     cancelSequence();
     cancelVoiceTimers();
@@ -122,8 +124,6 @@ impl app.resetDemo -> None {
     fact_decisions = blankFactDecisions();
     pending_fact_id = "";
     pending_fact_decision = "";
-    condition_decisions = blankConditionDecisions();
-    question_decisions = blankQuestionDecisions();
     insights_preparing = False;
     mascot_message_visible = False;
     highlighted_source_id = "";
@@ -176,20 +176,15 @@ impl app.beginAnalyzing -> None {
     assistant_state = "analyzing";
     assistant_status = statusForState("analyzing");
     assistant_message = "Reviewing the conversation.";
-    sequence_timer = setTimeout(
-        revealFacts,
-        sequenceDelayForState("analyzing")
-    );
+    sequence_timer = setTimeout(revealFacts, sequenceDelayForState("analyzing"));
 }
 
 impl app.revealFacts -> None {
     sequence_timer = None;
-    candidate_facts = PREPARED_VOICE_CANDIDATES;
-    assistant_message = "I found a few details to verify.";
-    sequence_timer = setTimeout(
-        finishDemo,
-        sequenceDelayForState("facts_ready")
-    );
+    assistant_state = "idle";
+    assistant_status = "Load the prepared encounter";
+    assistant_message = "Candidate facts are created only by the Jac backend.";
+    is_transitioning = False;
 }
 
 impl app.finishDemo -> None {
@@ -227,9 +222,7 @@ impl app.verifyFact(fact_id: str, decision: str) -> None {
         return;
     }
     previous_decision: str = (
-        fact_decisions[fact_id]
-        if fact_id in fact_decisions else
-        "neutral"
+        fact_decisions[fact_id] if fact_id in fact_decisions else "neutral"
     );
     pending_fact_id = fact_id;
     pending_fact_decision = decision;
@@ -241,36 +234,28 @@ impl app.verifyFact(fact_id: str, decision: str) -> None {
         final_review_status = "empty";
         final_review_data = {};
     }
-    if intelligence_scenario == "success" {
-        intelligence_pending_action = "verify";
-        callBackendAction(
-            "verify_fact",
-            {
-                "fact_id": fact_id,
-                "decision": decision,
-                "clinician_id": "demo-clinician",
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveFactDecision).catch(failFactDecision);
-    } else {
-        fact_decisions = updateFactDecision(
-            fact_decisions,
-            fact_id,
-            "accepted" if decision == "accept" else "rejected"
-        );
-        pending_fact_id = "";
-        pending_fact_decision = "";
-    }
+    intelligence_pending_action = "verify";
+    callBackendAction(
+        "verify_fact",
+        {
+            "fact_id": fact_id,
+            "decision": decision,
+            "clinician_id": "demo-clinician",
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        lambda (response: any) { receiveFactDecision(response, fact_id, decision); }
+    ).catch(
+        failFactDecision
+    );
 }
 
 
-impl app.receiveFactDecision(response: any) -> None {
+impl app.receiveFactDecision(response: any, fact_id: str, decision: str) -> None {
     intelligence_pending_action = "";
     if response["success"] {
         fact_decisions = updateFactDecision(
-            fact_decisions,
-            pending_fact_id,
-            "accepted" if pending_fact_decision == "accept" else "rejected"
+            fact_decisions, fact_id, "accepted" if decision == "accept" else "rejected"
         );
         intelligence_error_message = "";
     } else {
@@ -288,43 +273,12 @@ impl app.failFactDecision(error: any) -> None {
     pending_fact_decision = "";
 }
 
-impl app.reviewCondition(condition_id: str) -> None {
-    condition_decisions = updateConditionDecision(
-        condition_decisions,
-        condition_id,
-        "review"
-    );
-}
-
-impl app.markConditionNotRelevant(condition_id: str) -> None {
-    condition_decisions = updateConditionDecision(
-        condition_decisions,
-        condition_id,
-        "not_relevant"
-    );
-}
-
-impl app.setQuestionStatus(question_id: str, status: str) -> None {
-    question_decisions = updateQuestionDecision(
-        question_decisions,
-        question_id,
-        status
-    );
-}
-
 impl app.continueToInsights -> None {
-    if canContinueToInsights(
-        demo_loaded,
-        is_transitioning,
-        len(candidate_facts) > 0
-    ) {
+    if canContinueToInsights(demo_loaded, is_transitioning, len(candidate_facts) > 0) {
         current_screen = "insights";
         insights_preparing = True;
         mascot_message_visible = False;
-        sequence_timer = setTimeout(
-            finishInsightsPreparation,
-            800.0
-        );
+        sequence_timer = setTimeout(finishInsightsPreparation, 800.0);
         window.scrollTo(0, 0);
     }
 }
@@ -349,9 +303,7 @@ impl app.continueToResults -> None {
     current_screen = "results";
     mascot_message_visible = False;
     if (
-        "id" in analysis_data
-        and "id" not in final_review_data
-        and not analysis_stale
+        "id" in analysis_data and "id" not in final_review_data and not analysis_stale
     ) {
         prepareFinalReview();
     }
@@ -387,12 +339,6 @@ impl app.cancelResultTimer -> None {
 }
 
 
-impl app.changeIntelligenceScenario(e: any) -> None {
-    intelligence_scenario = e.target.value;
-    intelligence_error_message = "";
-}
-
-
 impl app.loadTranslations -> None {
     if len(intelligence_pending_action) > 0 {
         return;
@@ -406,14 +352,10 @@ impl app.loadTranslations -> None {
     intelligence_pending_action = "translation";
     translation_status = "loading";
     intelligence_error_message = "";
-    if (
-        intelligence_scenario == "success"
-        and len(capture_session_id) > 0
-        and len(transcript_data) > 0
-    ) {
+    if len(capture_session_id) > 0 and len(transcript_data) > 0 {
         translation_chunk_index = 0;
-        translateNextChunk();
-    } elif intelligence_scenario == "success" and len(capture_session_id) > 0 {
+        translateChunkAt(0, []);
+    } elif len(capture_session_id) > 0 {
         callBackendAction(
             "get_translated_transcript",
             {
@@ -421,49 +363,55 @@ impl app.loadTranslations -> None {
                 "target_language": "English",
                 "session_id": "hospi-pet-frontend-demo"
             }
-        ).then(receiveIntelligenceResponse).catch(failIntelligenceAction);
-    } elif intelligence_scenario == "success" {
+        ).then(
+            lambda (response: any) { receiveIntelligenceResponse(
+                response, "translation"
+            ); }
+        ).catch(
+            failIntelligenceAction
+        );
+    } else {
         intelligence_pending_action = "";
         translation_status = "recoverable_error";
         intelligence_error_message = (
             "Record or load the prepared voice encounter before translating."
         );
-    } else {
-        intelligence_timer = setTimeout(finishIntelligenceAction, 320.0);
     }
 }
 
 
-impl app.translateNextChunk -> None {
-    if translation_chunk_index >= len(transcript_data) {
-        callBackendAction(
-            "get_translated_transcript",
-            {
-                "capture_session_id": capture_session_id,
-                "target_language": "English",
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveIntelligenceResponse).catch(failIntelligenceAction);
+impl app.translateChunkAt(index: int, rows: list[dict[str, any]]) -> None {
+    if index >= len(transcript_data) {
+        translated_rows = rows;
+        translation_chunk_index = index;
+        translation_status = "success";
+        intelligence_pending_action = "";
         return;
     }
     callBackendAction(
         "translate_transcript_chunk",
         {
-            "transcript_chunk_id": transcript_data[translation_chunk_index]["id"],
+            "transcript_chunk_id": transcript_data[index]["id"],
             "target_language": "English",
             "session_id": "hospi-pet-frontend-demo"
         }
-    ).then(receiveTranslationChunk).catch(failIntelligenceAction);
+    ).then(
+        lambda (response: any) { receiveTranslationChunk(response, index, rows); }
+    ).catch(
+        failIntelligenceAction
+    );
 }
 
 
-impl app.receiveTranslationChunk(response: any) -> None {
+impl app.receiveTranslationChunk(
+    response: any, index: int, rows: list[dict[str, any]]
+) -> None {
     if not response["success"] {
         failIntelligenceAction(response);
         return;
     }
-    translation_chunk_index += 1;
-    translateNextChunk();
+    next_rows: list[dict[str, any]] = [*rows, response["translated_chunk"]];
+    translateChunkAt(index + 1, next_rows);
 }
 
 
@@ -480,17 +428,14 @@ impl app.generateQuickNote -> None {
     intelligence_pending_action = "quick_note";
     quick_note_status = "loading";
     intelligence_error_message = "";
-    if intelligence_scenario == "success" {
-        callBackendAction(
-            "generate_live_quick_summary",
-            {
-                "encounter_id": "encounter-maya-001",
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveIntelligenceResponse).catch(failIntelligenceAction);
-    } else {
-        intelligence_timer = setTimeout(finishIntelligenceAction, 340.0);
-    }
+    callBackendAction(
+        "generate_live_quick_summary",
+        {"encounter_id": "encounter-maya-001", "session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        lambda (response: any) { receiveIntelligenceResponse(response, "quick_note"); }
+    ).catch(
+        failIntelligenceAction
+    );
 }
 
 
@@ -505,48 +450,42 @@ impl app.analyzeAcceptedInformation -> None {
     intelligence_pending_action = "analysis";
     analysis_status = "loading";
     intelligence_error_message = "";
-    if intelligence_scenario == "success" {
-        callBackendAction(
-            "run_verified_encounter_analysis",
-            {
-                "encounter_id": "encounter-maya-001",
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveIntelligenceResponse).catch(failIntelligenceAction);
-    } else {
-        intelligence_timer = setTimeout(finishIntelligenceAction, 420.0);
-    }
+    callBackendAction(
+        "run_verified_encounter_analysis",
+        {"encounter_id": "encounter-maya-001", "session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        lambda (response: any) { receiveIntelligenceResponse(response, "analysis"); }
+    ).catch(
+        failIntelligenceAction
+    );
 }
 
 
 impl app.loadAnalysisTrace -> None {
-    if (
-        len(intelligence_pending_action) > 0
-        or "id" not in analysis_data
-    ) {
+    if (len(intelligence_pending_action) > 0 or "id" not in analysis_data) {
         return;
     }
     cancelIntelligenceTimer();
     intelligence_pending_action = "trace";
     source_trace_status = "loading";
     intelligence_error_message = "";
-    if intelligence_scenario == "success" {
-        item_id: str = (
-            analysis_data["summary"]["id"]
-            if "summary" in analysis_data and analysis_data["summary"] is not None else
-            analysis_data["id"]
-        );
-        callBackendAction(
-            "trace_analysis_item",
-            {
-                "analysis_run_id": analysis_data["id"],
-                "item_id": item_id,
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveIntelligenceResponse).catch(failIntelligenceAction);
-    } else {
-        intelligence_timer = setTimeout(finishIntelligenceAction, 280.0);
-    }
+    item_id: str = (
+        analysis_data["summary"]["id"]
+            if "summary" in analysis_data and analysis_data["summary"] is not None
+            else analysis_data["id"]
+    );
+    callBackendAction(
+        "trace_analysis_item",
+        {
+            "analysis_run_id": analysis_data["id"],
+            "item_id": item_id,
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        lambda (response: any) { receiveIntelligenceResponse(response, "trace"); }
+    ).catch(
+        failIntelligenceAction
+    );
 }
 
 
@@ -562,102 +501,92 @@ impl app.prepareFinalReview -> None {
     intelligence_pending_action = "final_review";
     final_review_status = "loading";
     intelligence_error_message = "";
-    if intelligence_scenario == "success" {
-        callBackendAction(
-            "generate_final_review_packet",
-            {
-                "encounter_id": "encounter-maya-001",
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveIntelligenceResponse).catch(failIntelligenceAction);
-    } else {
-        intelligence_timer = setTimeout(finishIntelligenceAction, 360.0);
-    }
+    callBackendAction(
+        "generate_final_review_packet",
+        {"encounter_id": "encounter-maya-001", "session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        lambda (response: any) { receiveIntelligenceResponse(
+            response, "final_review"
+        ); }
+    ).catch(
+        failIntelligenceAction
+    );
 }
 
 
 impl app.finishIntelligenceAction -> None {
     intelligence_timer = None;
-    response: dict[str, any] = intelligenceFixture(
-        intelligence_pending_action,
-        intelligence_scenario
-    );
-    receiveIntelligenceResponse(response);
+    failIntelligenceAction(None);
 }
 
 
-impl app.receiveIntelligenceResponse(response: any) -> None {
-    backend_connected = intelligence_scenario == "success";
-    action: str = intelligence_pending_action;
+impl app.receiveIntelligenceResponse(response: any, action: str) -> None {
+    backend_connected = response["success"];
     intelligence_pending_action = "";
-    intelligence_error_message = (
-        response["message"] if not response["success"] else ""
-    );
+    intelligence_error_message = response["message"] if not response["success"] else "";
 
     if action == "translation" {
-        translation_status = responseUiStatus(
-            response,
-            "translated_transcript"
+        next_translation_status: str = responseUiStatus(
+            response, "translated_transcript"
         );
+        translation_status = next_translation_status;
         translated_rows = (
             response["translated_transcript"]
-            if translation_status in ["success", "provider_fallback"] else
-            []
+                if next_translation_status in ["success", "provider_fallback"]
+                else []
         );
     } elif action == "quick_note" {
-        quick_note_status = responseUiStatus(
-            response,
-            "live_quick_summary"
-        );
+        next_quick_note_status: str = responseUiStatus(response, "live_quick_summary");
+        quick_note_status = next_quick_note_status;
         quick_note_data = (
             response["live_quick_summary"]
-            if quick_note_status in ["success", "provider_fallback"] else
-            {}
+                if next_quick_note_status in ["success", "provider_fallback"]
+                else {}
         );
     } elif action == "analysis" {
-        analysis_status = responseUiStatus(response, "analysis_run");
-        if analysis_status in ["success", "provider_fallback"] {
-            analysis_data = response["analysis_run"];
+        next_analysis_status: str = responseUiStatus(response, "analysis_run");
+        analysis_status = next_analysis_status;
+        if next_analysis_status in ["success", "provider_fallback"] {
+            analysis_run: dict[str, any] = response["analysis_run"];
+            analysis_data = analysis_run;
             intelligence_questions = response["suggested_questions"];
             intelligence_question_states = {};
-            analysis_stale = response["analysis_run"]["stale"];
+            analysis_stale = analysis_run["stale"];
             final_review_status = "empty";
             final_review_data = {};
-            if intelligence_scenario == "success" {
-                intelligence_pending_action = "questions";
-                callBackendAction(
-                    "generate_clarifying_questions",
-                    {
-                        "encounter_id": "encounter-maya-001",
-                        "analysis_run_id": analysis_data["id"],
-                        "session_id": "hospi-pet-frontend-demo"
-                    }
-                ).then(receiveGeneratedQuestions).catch(failIntelligenceAction);
-            }
+            intelligence_pending_action = "questions";
+            callBackendAction(
+                "generate_clarifying_questions",
+                {
+                    "encounter_id": "encounter-maya-001",
+                    "analysis_run_id": analysis_run["id"],
+                    "session_id": "hospi-pet-frontend-demo"
+                }
+            ).then(
+                receiveGeneratedQuestions
+            ).catch(
+                failIntelligenceAction
+            );
         } else {
             analysis_data = {};
             clinician_note_data = {};
             intelligence_questions = [];
         }
     } elif action == "trace" {
-        source_trace_status = responseUiStatus(
-            response,
-            "analysis_provenance"
-        );
+        next_trace_status: str = responseUiStatus(response, "analysis_provenance");
+        source_trace_status = next_trace_status;
         source_trace_data = (
             response["analysis_provenance"]
-            if source_trace_status in ["success", "provider_fallback"] else
-            []
+                if next_trace_status in ["success", "provider_fallback"]
+                else []
         );
     } elif action == "final_review" {
-        final_review_status = responseUiStatus(
-            response,
-            "final_review_packet"
-        );
+        next_review_status: str = responseUiStatus(response, "final_review_packet");
+        final_review_status = next_review_status;
         final_review_data = (
             response["final_review_packet"]
-            if final_review_status in ["success", "provider_fallback"] else
-            {}
+                if next_review_status in ["success", "provider_fallback"]
+                else {}
         );
     }
 }
@@ -674,12 +603,257 @@ impl app.receiveGeneratedQuestions(response: any) -> None {
 }
 
 
+impl app.checkCareGaps -> None {
+    if len(intelligence_pending_action) > 0 {
+        return;
+    }
+    intelligence_pending_action = "care_gaps";
+    care_gap_status = "loading";
+    intelligence_error_message = "";
+    callBackendAction(
+        "run_care_gap_check", {"session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        receiveCareGaps
+    ).catch(
+        failIntelligenceAction
+    );
+}
+
+
+impl app.receiveCareGaps(response: any) -> None {
+    intelligence_pending_action = "";
+    if response["success"] {
+        care_gaps = response["care_gaps"];
+        care_gap_status = "success";
+        intelligence_error_message = "";
+    } else {
+        care_gap_status = "recoverable_error";
+        intelligence_error_message = response["message"];
+    }
+}
+
+
+impl app.resolveFirstGap -> None {
+    if len(intelligence_pending_action) > 0 or len(care_gaps) == 0 {
+        return;
+    }
+    intelligence_pending_action = "resolve_gap";
+    care_gap_status = "loading";
+    callBackendAction(
+        "resolve_gap",
+        {
+            "gap_id": care_gaps[0]["id"],
+            "resolution": "Assigned follow-through for the verified care task",
+            "owner": "clinic-care-team",
+            "due_date": "this week",
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        receiveGapResolution
+    ).catch(
+        failIntelligenceAction
+    );
+}
+
+
+impl app.receiveGapResolution(response: any) -> None {
+    intelligence_pending_action = "";
+    if not response["success"] {
+        care_gap_status = "recoverable_error";
+        intelligence_error_message = response["message"];
+        return;
+    }
+    analysis_stale = True;
+    final_review_status = "empty";
+    final_review_data = {};
+    intelligence_pending_action = "care_gaps";
+    care_gap_status = "loading";
+    callBackendAction(
+        "run_care_gap_check", {"session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        receiveCareGaps
+    ).catch(
+        failIntelligenceAction
+    );
+}
+
+
+impl app.generatePatientPlans -> None {
+    if len(intelligence_pending_action) > 0 {
+        return;
+    }
+    intelligence_pending_action = "plan_english";
+    patient_plan_status = "loading";
+    intelligence_error_message = "";
+    callBackendAction(
+        "generate_patient_plan",
+        {
+            "language": "English",
+            "ai_mode": "disabled",
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        receiveEnglishPatientPlan
+    ).catch(
+        failIntelligenceAction
+    );
+}
+
+
+impl app.receiveEnglishPatientPlan(response: any) -> None {
+    if not response["success"] {
+        intelligence_pending_action = "";
+        patient_plan_status = "recoverable_error";
+        intelligence_error_message = response["message"];
+        return;
+    }
+    english_patient_plan = response["patient_plan"];
+    intelligence_pending_action = "plan_spanish";
+    callBackendAction(
+        "generate_patient_plan",
+        {
+            "language": "Spanish",
+            "ai_mode": "disabled",
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        receiveSpanishPatientPlan
+    ).catch(
+        failIntelligenceAction
+    );
+}
+
+
+impl app.receiveSpanishPatientPlan(response: any) -> None {
+    intelligence_pending_action = "";
+    if response["success"] {
+        spanish_patient_plan = response["patient_plan"];
+        patient_plan_status = "success";
+        intelligence_error_message = "";
+    } else {
+        patient_plan_status = "recoverable_error";
+        intelligence_error_message = response["message"];
+    }
+}
+
+
+impl app.generatePatientAudio -> None {
+    if len(intelligence_pending_action) > 0 {
+        return;
+    }
+    intelligence_pending_action = "patient_audio";
+    patient_audio_status = "loading";
+    callBackendAction(
+        "generate_patient_audio_script",
+        {"language": "Spanish", "session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        receivePatientAudio
+    ).catch(
+        failIntelligenceAction
+    );
+}
+
+
+impl app.receivePatientAudio(response: any) -> None {
+    intelligence_pending_action = "";
+    if response["success"] {
+        patient_audio_script = response["patient_audio_script"];
+        patient_audio_status = "success";
+        intelligence_error_message = "";
+    } else {
+        patient_audio_status = "recoverable_error";
+        intelligence_error_message = response["message"];
+    }
+}
+
+
+impl app.playPatientAudio -> None {
+    if "text" not in patient_audio_script {
+        return;
+    }
+    browser_window: any = window;
+    if "speechSynthesis" not in browser_window {
+        patient_audio_status = "unsupported";
+        return;
+    }
+    browser_window.speechSynthesis.cancel();
+    utterance: any = new(
+        browser_window.SpeechSynthesisUtterance, patient_audio_script["text"]
+    );
+    utterance.lang = "es-US";
+    browser_window.speechSynthesis.speak(utterance);
+}
+
+
+impl app.runEvidenceAudit -> None {
+    if len(intelligence_pending_action) > 0 {
+        return;
+    }
+    intelligence_pending_action = "audit";
+    audit_status = "loading";
+    callBackendAction(
+        "run_evidence_audit", {"session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        receiveEvidenceAudit
+    ).catch(
+        failIntelligenceAction
+    );
+}
+
+
+impl app.receiveEvidenceAudit(response: any) -> None {
+    intelligence_pending_action = "";
+    if response["success"] {
+        audit_conflicts = response["conflicts"];
+        audit_status = "success";
+        intelligence_error_message = "";
+    } else {
+        audit_status = "recoverable_error";
+        intelligence_error_message = response["message"];
+    }
+}
+
+
+impl app.addDemoContradiction -> None {
+    if len(intelligence_pending_action) > 0 {
+        return;
+    }
+    intelligence_pending_action = "contradiction";
+    audit_status = "loading";
+    callBackendAction(
+        "add_demo_contradiction", {"session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        receiveDemoContradiction
+    ).catch(
+        failIntelligenceAction
+    );
+}
+
+
+impl app.receiveDemoContradiction(response: any) -> None {
+    intelligence_pending_action = "";
+    if not response["success"] {
+        audit_status = "recoverable_error";
+        intelligence_error_message = response["message"];
+        return;
+    }
+    intelligence_pending_action = "audit";
+    audit_status = "loading";
+    callBackendAction(
+        "run_evidence_audit", {"session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        receiveEvidenceAudit
+    ).catch(
+        failIntelligenceAction
+    );
+}
+
+
 impl app.failIntelligenceAction(error: any) -> None {
     action: str = intelligence_pending_action;
     intelligence_pending_action = "";
     intelligence_error_message = (
-        "The backend action is temporarily unavailable. Retry this action "
-        + "or select the labeled provider fallback demonstration."
+        "The Jac backend action is temporarily unavailable. Retry this action."
     );
     if action == "translation" {
         translation_status = "recoverable_error";
@@ -691,6 +865,14 @@ impl app.failIntelligenceAction(error: any) -> None {
         source_trace_status = "recoverable_error";
     } elif action == "final_review" {
         final_review_status = "recoverable_error";
+    } elif action in ["care_gaps", "resolve_gap"] {
+        care_gap_status = "recoverable_error";
+    } elif action in ["plan_english", "plan_spanish"] {
+        patient_plan_status = "recoverable_error";
+    } elif action == "patient_audio" {
+        patient_audio_status = "recoverable_error";
+    } elif action in ["audit", "contradiction"] {
+        audit_status = "recoverable_error";
     }
 }
 
@@ -707,7 +889,6 @@ impl app.cancelIntelligenceTimer -> None {
 impl app.resetIntelligence -> None {
     cancelIntelligenceTimer();
     cancelClinicianNoteTimer();
-    intelligence_scenario = "success";
     translation_status = "empty";
     translation_chunk_index = 0;
     translated_rows = [];
@@ -726,6 +907,15 @@ impl app.resetIntelligence -> None {
     active_intelligence_tab = "summary";
     source_trace_status = "empty";
     source_trace_data = [];
+    care_gap_status = "empty";
+    care_gaps = [];
+    patient_plan_status = "empty";
+    english_patient_plan = {};
+    spanish_patient_plan = {};
+    patient_audio_status = "empty";
+    patient_audio_script = {};
+    audit_status = "empty";
+    audit_conflicts = [];
     final_review_status = "empty";
     final_review_data = {};
     intelligence_error_message = "";
@@ -751,21 +941,18 @@ impl app.dismissIntelligenceQuestion(question_id: str) -> None {
     pending_question_id = question_id;
     pending_question_decision = "dismissed";
     intelligence_error_message = "";
-    if intelligence_scenario == "success" {
-        callBackendAction(
-            "dismiss_suggested_question",
-            {
-                "question_id": question_id,
-                "clinician_id": "demo-clinician",
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveQuestionResponse).catch(failIntelligenceAction);
-    } else {
-        intelligence_timer = setTimeout(
-            finishIntelligenceQuestionAction,
-            240.0
-        );
-    }
+    callBackendAction(
+        "dismiss_suggested_question",
+        {
+            "question_id": question_id,
+            "clinician_id": "demo-clinician",
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        lambda (response: any) { receiveQuestionResponse(response, question_id); }
+    ).catch(
+        failIntelligenceAction
+    );
 }
 
 
@@ -781,8 +968,7 @@ impl app.answerIntelligenceQuestion(question_id: str) -> None {
     pending_question_decision = "answered";
     intelligence_error_message = "";
     if (
-        intelligence_scenario == "success"
-        and "accepted_fact_ids" in analysis_data
+        "accepted_fact_ids" in analysis_data
         and len(analysis_data["accepted_fact_ids"]) > 0
     ) {
         callBackendAction(
@@ -793,46 +979,35 @@ impl app.answerIntelligenceQuestion(question_id: str) -> None {
                 "clinician_id": "demo-clinician",
                 "session_id": "hospi-pet-frontend-demo"
             }
-        ).then(receiveQuestionResponse).catch(failIntelligenceAction);
-    } else {
-        intelligence_timer = setTimeout(
-            finishIntelligenceQuestionAction,
-            240.0
+        ).then(
+            lambda (response: any) { receiveQuestionResponse(response, question_id); }
+        ).catch(
+            failIntelligenceAction
         );
+    } else {
+        intelligence_pending_action = "";
+        intelligence_error_message = "No accepted source fact is available for this answer.";
     }
 }
 
 
 impl app.finishIntelligenceQuestionAction -> None {
     intelligence_timer = None;
-    if intelligence_scenario == "recoverable_error" {
-        intelligence_error_message = (
-            "The suggested question was not found in this session."
-        );
-    } elif intelligence_scenario == "empty" {
-        intelligence_error_message = "No question update was returned.";
-    } else {
-        updated_states: dict[str, str] = intelligence_question_states.copy();
-        updated_states[pending_question_id] = pending_question_decision;
-        intelligence_question_states = updated_states;
-        intelligence_error_message = "";
-    }
+    intelligence_error_message = "The Jac backend did not return a question update.";
     intelligence_pending_action = "";
     pending_question_id = "";
     pending_question_decision = "";
 }
 
 
-impl app.receiveQuestionResponse(response: any) -> None {
+impl app.receiveQuestionResponse(response: any, question_id: str) -> None {
     intelligence_timer = None;
     if not response["success"] {
         intelligence_error_message = response["message"];
     } else {
         updated_states: dict[str, str] = intelligence_question_states.copy();
         if len(response["suggested_questions"]) > 0 {
-            updated_states[pending_question_id] = (
-                response["suggested_questions"][0]["status"]
-            );
+            updated_states[question_id] = response["suggested_questions"][0]["status"];
         }
         intelligence_question_states = updated_states;
         intelligence_error_message = "";
@@ -843,10 +1018,7 @@ impl app.receiveQuestionResponse(response: any) -> None {
 }
 
 
-impl app.toggleIntelligenceQuestionDetail(
-    question_id: str,
-    mode: str
-) -> None {
+impl app.toggleIntelligenceQuestionDetail(question_id: str, mode: str) -> None {
     if detail_question_id == question_id and detail_mode == mode {
         detail_question_id = "";
         detail_mode = "";
@@ -907,7 +1079,11 @@ impl app.startRecording -> None {
             "input_source": "live_voice",
             "session_id": "hospi-pet-frontend-demo"
         }
-    ).then(receiveCaptureStart).catch(failCaptureStart);
+    ).then(
+        receiveCaptureStart
+    ).catch(
+        failCaptureStart
+    );
 }
 
 
@@ -944,9 +1120,9 @@ impl app.requestBrowserMicrophone -> None {
         return;
     }
 
-    nav.mediaDevices.getUserMedia({"audio": True}).then(
-        voicePermissionGranted
-    ).catch(voicePermissionFailed);
+    nav.mediaDevices.getUserMedia({"audio": True}).then(voicePermissionGranted).catch(
+        voicePermissionFailed
+    );
 }
 
 
@@ -990,22 +1166,18 @@ impl app.startBrowserTranscription -> None {
     browser_window: any = window;
     speech_constructor: any = (
         browser_window.SpeechRecognition
-        if browser_window.SpeechRecognition else
-        browser_window.webkitSpeechRecognition
+            if browser_window.SpeechRecognition
+            else browser_window.webkitSpeechRecognition
     );
     if not speech_constructor {
         voice_status = "recording";
         assistant_message = (
-            "Microphone active, but browser live transcription is unavailable. "
-            + "Use the prepared voice demo for transcript content."
+            "Microphone active, but browser live transcription is unavailable. " + "Use the prepared voice demo for transcript content."
         );
         return;
     }
 
-    voice_recognition = browser_window.Reflect.construct(
-        speech_constructor,
-        []
-    );
+    voice_recognition = browser_window.Reflect.construct(speech_constructor, []);
     voice_recognition.continuous = True;
     voice_recognition.interimResults = True;
     voice_recognition.lang = "en-US";
@@ -1036,8 +1208,7 @@ impl app.handleSpeechError(event: any) -> None {
     voice_interim_text = "";
     if event.error != "no-speech" and event.error != "aborted" {
         assistant_message = (
-            "Live browser transcription paused. The recording can be retried "
-            + "or replaced with the prepared fallback."
+            "Live browser transcription paused. The recording can be retried " + "or replaced with the prepared fallback."
         );
     }
 }
@@ -1071,7 +1242,11 @@ impl app.sendNextTranscriptChunk -> None {
             "confidence": 1.0,
             "session_id": "hospi-pet-frontend-demo"
         }
-    ).then(receiveTranscriptChunk).catch(failTranscriptChunk);
+    ).then(
+        receiveTranscriptChunk
+    ).catch(
+        failTranscriptChunk
+    );
 }
 
 
@@ -1104,8 +1279,8 @@ impl app.failTranscriptChunk(error: any) -> None {
     assistant_status = "Transcript chunk needs retry";
     assistant_message = (
         error["message"]
-        if isinstance(error, dict) and "message" in error else
-        "The finalized speech could not be added. Cancel and retry or use the prepared fallback."
+            if isinstance(error, dict) and "message" in error
+            else "The finalized speech could not be added. Cancel and retry or use the prepared fallback."
     );
 }
 
@@ -1181,7 +1356,11 @@ impl app.beginFinalizeCapture -> None {
                 "capture_session_id": capture_session_id,
                 "session_id": "hospi-pet-frontend-demo"
             }
-        ).then(receiveCaptureFinalized).catch(failPreparedVoiceDemo);
+        ).then(
+            receiveCaptureFinalized
+        ).catch(
+            failPreparedVoiceDemo
+        );
     } else {
         voice_sequence_timer = setTimeout(finishStopRecording, 240.0);
     }
@@ -1234,19 +1413,51 @@ impl app.loadPreparedVoiceDemo -> None {
     assistant_state = "listening";
     assistant_status = "Listening to the prepared encounter";
     assistant_message = "Prepared demo audio is being represented by contract-shaped transcript data.";
+    callBackendAction("reset_demo", {"session_id": "hospi-pet-frontend-demo"}).then(
+        receivePreparedDemoReset
+    ).catch(
+        failPreparedVoiceDemo
+    );
+}
+
+
+impl app.receivePreparedDemoReset(response: any) -> None {
+    if not response["success"] {
+        failPreparedVoiceDemo(response);
+        return;
+    }
+    callBackendAction(
+        "load_demo_encounter", {"session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        receivePreparedEncounter
+    ).catch(
+        failPreparedVoiceDemo
+    );
+}
+
+
+impl app.receivePreparedEncounter(response: any) -> None {
+    if not response["success"] {
+        failPreparedVoiceDemo(response);
+        return;
+    }
+    demo_state: any = response["demo_state"];
+    transcript_data = demo_state["transcript"];
+    candidate_facts = response["candidate_facts"];
+    fact_decisions = blankFactDecisions();
     callBackendAction(
         "load_prepared_voice_demo",
-        {
-            "encounter_id": "encounter-maya-001",
-            "session_id": "hospi-pet-frontend-demo"
-        }
-    ).then(receivePreparedVoiceDemo).catch(failPreparedVoiceDemo);
+        {"encounter_id": "encounter-maya-001", "session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        receivePreparedVoiceDemo
+    ).catch(
+        failPreparedVoiceDemo
+    );
 }
 
 
 impl app.finishPreparedVoiceDemo -> None {
-    response: dict[str, any] = preparedVoiceResponse();
-    receivePreparedVoiceDemo(response);
+    failPreparedVoiceDemo(None);
 }
 
 
@@ -1271,20 +1482,13 @@ impl app.receivePreparedVoiceDemo(response: any) -> None {
         "visit_id": capture_session["encounter_id"],
         "review_status": "Ready for review"
     };
-    transcript_data = response["transcript_chunks"];
-    demo_loaded = True;
-    if "candidate_facts" not in response {
-        voice_status = "processing";
-        callBackendAction(
-            "finalize_capture_session",
-            {
-                "capture_session_id": capture_session_id,
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveCaptureFinalized).catch(failPreparedVoiceDemo);
-        return;
+    if len(response["transcript_chunks"]) > 0 {
+        transcript_data = response["transcript_chunks"];
     }
-    candidate_facts = response["candidate_facts"];
+    demo_loaded = True;
+    if len(response["candidate_facts"]) > 0 {
+        candidate_facts = response["candidate_facts"];
+    }
     fact_decisions = blankFactDecisions();
     voice_status = "completed";
     assistant_state = "complete";
@@ -1294,12 +1498,6 @@ impl app.receivePreparedVoiceDemo(response: any) -> None {
 
 
 impl app.failPreparedVoiceDemo(error: any) -> None {
-    if voice_prepared_demo {
-        response: dict[str, any] = preparedVoiceResponse();
-        receivePreparedVoiceDemo(response);
-        assistant_message = "Prepared backend fixture fallback loaded; no live backend success is implied.";
-        return;
-    }
     voice_requesting = False;
     voice_recording = False;
     voice_stopping = False;
@@ -1308,8 +1506,8 @@ impl app.failPreparedVoiceDemo(error: any) -> None {
     assistant_status = "Prepared demo unavailable";
     assistant_message = (
         error["message"]
-        if isinstance(error, dict) and "message" in error else
-        "The backend action is unavailable. Try again when the Jac server is running."
+            if isinstance(error, dict) and "message" in error
+            else "The backend action failed: " + str(error)
     );
 }
 
@@ -1393,7 +1591,9 @@ impl app.discardRecording -> None {
     voice_finalize_requested = False;
     recording_seconds = 0;
     capture_session_id = "";
-    if demo_loaded and len(transcript_data) > 0 and transcript_data[0]["id"] == "chunk-1" {
+    if demo_loaded
+    and len(transcript_data) > 0
+    and transcript_data[0]["id"] == "chunk-1" {
         demo_loaded = False;
         patient_data = {};
         transcript_data = [];
@@ -1462,14 +1662,19 @@ impl app.openCamera -> None {
         return;
     }
 
-    nav.mediaDevices.getUserMedia({
-        "video": {"facingMode": "environment"},
-        "audio": False
-    }).then(cameraPermissionGranted).catch(cameraPermissionFailed);
+    nav.mediaDevices.getUserMedia(
+        {"video": {"facingMode": "environment"}, "audio": False}
+    ).then(
+        cameraPermissionGranted
+    ).catch(
+        cameraPermissionFailed
+    );
+    document_timer = setTimeout(lambda() { cameraPermissionTimedOut(); }, 5000.0);
 }
 
 
 impl app.cameraPermissionGranted(stream: any) -> None {
+    cancelDocumentTimer();
     camera_stream = stream;
     camera_active = True;
     document_requesting = False;
@@ -1484,6 +1689,7 @@ impl app.cameraPermissionGranted(stream: any) -> None {
 
 
 impl app.cameraPermissionFailed(error: any) -> None {
+    cancelDocumentTimer();
     document_requesting = False;
     stopCameraCapture();
     if error and error.name == "NotAllowedError" {
@@ -1496,6 +1702,19 @@ impl app.cameraPermissionFailed(error: any) -> None {
     assistant_state = "idle";
     assistant_status = "Camera unavailable";
     assistant_message = "Use a synthetic upload or try camera access again.";
+}
+
+
+impl app.cameraPermissionTimedOut -> None {
+    document_timer = None;
+    if document_requesting {
+        document_requesting = False;
+        document_permission = "recoverable_error";
+        document_message = "The camera permission request timed out. Upload a synthetic image or try again.";
+        assistant_state = "idle";
+        assistant_status = "Camera unavailable";
+        assistant_message = "Use a synthetic upload or try camera access again.";
+    }
 }
 
 
@@ -1612,7 +1831,43 @@ impl app.analyzeDocument -> None {
     assistant_state = "analyzing";
     assistant_status = "Reviewing the document";
     assistant_message = "Reading the synthetic document through the Jac document action.";
-    document_timer = setTimeout(advanceDocumentStage, 360.0);
+    if document_scenario == "unsupported_document" {
+        document_processing = False;
+        document_stage = "validation_error";
+        document_message = "DOCUMENT_TYPE_INVALID — use a lab order, referral, appointment card, or after-visit summary.";
+        assistant_state = "idle";
+        assistant_status = "I couldn’t read that document. Let’s try again.";
+        assistant_message = "This frontend validation state is recoverable.";
+    } elif document_scenario == "unreadable_document" {
+        document_processing = False;
+        document_stage = "validation_error";
+        document_message = "IMAGE_CORRUPT — the synthetic image is unreadable. Retake it with clearer framing and contrast.";
+        assistant_state = "idle";
+        assistant_status = "I couldn’t read that document. Let’s try again.";
+        assistant_message = "Retake or upload a clearer synthetic image.";
+    } elif document_scenario in [
+        "lab_success",
+        "referral_success",
+        "conflict_success"
+    ] {
+        document_stage = "reading_document";
+        document_message = "Reading the synthetic document.";
+        if document_file is not None {
+            sendDocumentForm(document_file);
+        } else {
+            fetch(document_preview_url).then(
+                lambda (response: any) { return response.blob(); }
+            ).then(
+                receiveCapturedDocumentBlob
+            ).catch(
+                failDocumentAnalysis
+            );
+        }
+    } else {
+        document_processing = False;
+        document_stage = "validation_error";
+        document_message = "Select a supported synthetic document scenario.";
+    }
 }
 
 
@@ -1658,13 +1913,18 @@ impl app.finishDocumentAnalysis -> None {
         } else {
             fetch(document_preview_url).then(
                 lambda (response: any) { return response.blob(); }
-            ).then(receiveCapturedDocumentBlob).catch(failDocumentAnalysis);
+            ).then(
+                receiveCapturedDocumentBlob
+            ).catch(
+                failDocumentAnalysis
+            );
         }
         return;
     }
 
-    response: dict[str, any] = documentResponse(document_scenario);
-    receiveDocumentAnalysis(response);
+    document_processing = False;
+    document_stage = "validation_error";
+    document_message = "Select a supported synthetic document scenario.";
 }
 
 
@@ -1675,28 +1935,36 @@ impl app.receiveCapturedDocumentBlob(blob: any) -> None {
 
 impl app.sendDocumentForm(image_input: any) -> None {
     browser_window: any = window;
-    form: any = browser_window.FormData();
+    form: any = new(browser_window.FormData);
     document_type: str = (
         "referral_document"
-        if document_scenario == "referral_success" else
-        ("appointment_card" if document_scenario == "conflict_success" else "lab_document")
+            if document_scenario == "referral_success"
+            else (
+                "appointment_card"
+                    if document_scenario == "conflict_success"
+                    else "lab_document"
+            )
     );
     mime_type: str = (
         image_input.type
-        if image_input.type in ["image/jpeg", "image/png", "image/webp"] else
-        "image/jpeg"
+            if image_input.type in ["image/jpeg", "image/png", "image/webp"]
+            else "image/jpeg"
     );
     form.append("encounter_id", "encounter-maya-001");
     form.append("document_type", document_type);
     form.append(
         "filename",
-        document_file_name if len(document_file_name) > 0 else "captured-synthetic-document.jpg"
+        document_file_name
+            if len(document_file_name) > 0
+            else "captured-synthetic-document.jpg"
     );
     form.append("mime_type", mime_type);
     form.append(
         "image_input",
         image_input,
-        document_file_name if len(document_file_name) > 0 else "captured-synthetic-document.jpg"
+        document_file_name
+            if len(document_file_name) > 0
+            else "captured-synthetic-document.jpg"
     );
     form.append("synthetic", "true");
     form.append("session_id", "hospi-pet-frontend-demo");
@@ -1709,7 +1977,9 @@ impl app.receiveDocumentAnalysis(response: any) -> None {
     document_processing = False;
     if not response["success"] {
         document_stage = "recoverable_error";
-        document_message = str(response["message"]) + " (" + str(response["error_code"]) + ")";
+        document_message = str(response["message"]) + " (" + str(
+            response["error_code"]
+        ) + ")";
         assistant_state = "idle";
         assistant_status = "I couldn’t read that document. Let’s try again.";
         assistant_message = response["message"];
@@ -1729,6 +1999,45 @@ impl app.receiveDocumentAnalysis(response: any) -> None {
     assistant_message = "Review the extracted text and verify each candidate.";
     document_file = None;
     backend_connected = True;
+    refreshDocumentExtraction();
+}
+
+
+impl app.refreshDocumentExtraction -> None {
+    if len(document_label) == 0 {
+        return;
+    }
+    callBackendAction(
+        "get_document_extraction",
+        {
+            "source_artifact_id": (
+                document_candidates[0]["source_artifact_id"]
+                    if len(document_candidates) > 0
+                    and "source_artifact_id" in document_candidates[0]
+                    else ""
+            ),
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        receiveDocumentExtraction
+    ).catch(
+        failDocumentAnalysis
+    );
+}
+
+
+impl app.receiveDocumentExtraction(response: any) -> None {
+    if not response["success"] {
+        failDocumentAnalysis(response);
+        return;
+    }
+    document_candidates = response["multimodal_candidates"];
+    if len(response["document_text_blocks"]) > 0 {
+        document_text = response["document_text_blocks"][0]["text"];
+        document_source_id = response["document_text_blocks"][0]["id"];
+    }
+    document_stage = "ready_for_review";
+    document_message = "Document extraction reloaded from the Jac graph.";
 }
 
 
@@ -1807,27 +2116,30 @@ impl app.traceSource(source_id: str) -> None {
                 "section_id": section_id,
                 "session_id": "hospi-pet-frontend-demo"
             }
-        ).then(receiveNoteTrace).catch(failNoteTrace);
+        ).then(
+            receiveNoteTrace
+        ).catch(
+            failNoteTrace
+        );
         return;
     }
     highlighted_source_id = source_id;
-    trace_message = (
-        "Opening " + SOURCE_METADATA[source_id]["source_label"] + "."
-        if source_id in SOURCE_METADATA else
-        "Opening the linked transcript source."
-    );
+    trace_message = "Opening the linked backend source.";
     if trace_timer is not None {
         clearTimeout(trace_timer);
     }
-    setTimeout(lambda () {
-        target: any = document.getElementById("source-" + source_id);
-        if target is not None {
-            target.focus();
-            target.scrollIntoView({"behavior": "auto", "block": "center"});
-        } else {
-            trace_message = "The source reference is valid but is not currently open on this screen.";
-        }
-    }, 0.0);
+    setTimeout(
+        lambda() {
+            target: any = document.getElementById("source-" + source_id);
+            if target is not None {
+                target.focus();
+                target.scrollIntoView({"behavior": "auto", "block": "center"});
+            } else {
+                trace_message = "The source reference is valid but is not currently open on this screen.";
+            }
+        },
+        0.0
+    );
     trace_timer = setTimeout(clearTrace, 2200.0);
 }
 
@@ -1840,9 +2152,9 @@ impl app.receiveNoteTrace(response: any) -> None {
     } else {
         chain: any = response["multimodal_provenance"][0];
         trace_message = (
-            str(chain["source_type"]) + " · "
-            + str(chain["verification_status"]) + " · "
-            + str(chain["source_excerpt"])
+            str(chain["source_type"]) + " · " + str(chain["verification_status"]) + " · " + str(
+                chain["source_excerpt"]
+            )
         );
     }
 }
@@ -1860,10 +2172,7 @@ impl app.clearTrace -> None {
 }
 
 
-impl app.changeClinicianNoteSection(
-    section_key: str,
-    value: str
-) -> None {
+impl app.changeClinicianNoteSection(section_key: str, value: str) -> None {
     if len(note_pending_action) > 0 or "id" not in clinician_note_data {
         return;
     }
@@ -1874,10 +2183,7 @@ impl app.changeClinicianNoteSection(
 
 
 impl app.generateClinicianNote -> None {
-    if (
-        len(note_pending_action) > 0
-        or acceptedCandidateCount(fact_decisions) == 0
-    ) {
+    if (len(note_pending_action) > 0 or acceptedCandidateCount(fact_decisions) == 0) {
         return;
     }
     cancelClinicianNoteTimer();
@@ -1887,18 +2193,18 @@ impl app.generateClinicianNote -> None {
     assistant_state = "analyzing";
     assistant_status = "Organizing the verified details";
     assistant_message = "Preparing the clinician-review note from accepted facts.";
-    if intelligence_scenario == "success" {
-        callBackendAction(
-            "generate_clinician_note_draft",
-            {
-                "encounter_id": "encounter-maya-001",
-                "clinician_hints": "",
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveClinicianNoteResponse).catch(failClinicianNoteAction);
-    } else {
-        note_timer = setTimeout(finishClinicianNoteAction, 360.0);
-    }
+    callBackendAction(
+        "generate_clinician_note_draft",
+        {
+            "encounter_id": "encounter-maya-001",
+            "clinician_hints": "",
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        lambda (response: any) { receiveClinicianNoteResponse(response, "generate"); }
+    ).catch(
+        failClinicianNoteAction
+    );
 }
 
 
@@ -1914,30 +2220,26 @@ impl app.saveClinicianNoteSection(section_key: str) -> None {
     note_pending_section = section_key;
     note_status = "loading";
     note_error = "";
-    if intelligence_scenario == "success" {
-        section_id: str = noteSectionId(clinician_note_data, section_key);
-        if len(section_id) == 0 {
-            failClinicianNoteAction(None);
-            return;
-        }
-        content: str = (
-            note_edits[section_key]
-            if section_key in note_edits else
-            ""
-        );
-        callBackendAction(
-            "update_note_section",
-            {
-                "note_id": clinician_note_data["id"],
-                "section_id": section_id,
-                "content": content,
-                "clinician_id": "demo-clinician",
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveClinicianNoteResponse).catch(failClinicianNoteAction);
-    } else {
-        note_timer = setTimeout(finishClinicianNoteAction, 220.0);
+    section_id: str = noteSectionId(clinician_note_data, section_key);
+    if len(section_id) == 0 {
+        failClinicianNoteAction(None);
+        return;
     }
+    content: str = note_edits[section_key] if section_key in note_edits else "";
+    callBackendAction(
+        "update_note_section",
+        {
+            "note_id": clinician_note_data["id"],
+            "section_id": section_id,
+            "content": content,
+            "clinician_id": "demo-clinician",
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        lambda (response: any) { receiveClinicianNoteResponse(response, "save"); }
+    ).catch(
+        failClinicianNoteAction
+    );
 }
 
 
@@ -1956,18 +2258,18 @@ impl app.approveClinicianNote -> None {
     assistant_state = "analyzing";
     assistant_status = "Preparing note approval";
     assistant_message = "Submitting the current draft for backend validation.";
-    if intelligence_scenario == "success" {
-        callBackendAction(
-            "approve_clinician_note",
-            {
-                "note_id": clinician_note_data["id"],
-                "clinician_id": "demo-clinician",
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(receiveClinicianNoteResponse).catch(failClinicianNoteAction);
-    } else {
-        note_timer = setTimeout(finishClinicianNoteAction, 320.0);
-    }
+    callBackendAction(
+        "approve_clinician_note",
+        {
+            "note_id": clinician_note_data["id"],
+            "clinician_id": "demo-clinician",
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        lambda (response: any) { receiveClinicianNoteResponse(response, "approve"); }
+    ).catch(
+        failClinicianNoteAction
+    );
 }
 
 
@@ -1985,11 +2287,7 @@ impl app.finishClinicianNoteAction -> None {
         note_status = "success";
         note_error = "";
     } else {
-        response: dict[str, any] = clinicianNoteFixture(
-            ("approve" if action == "approve" else "generate"),
-            intelligence_scenario
-        );
-        receiveClinicianNoteResponse(response);
+        failClinicianNoteAction(None);
         return;
     }
 
@@ -1998,8 +2296,7 @@ impl app.finishClinicianNoteAction -> None {
 }
 
 
-impl app.receiveClinicianNoteResponse(response: any) -> None {
-    action: str = note_pending_action;
+impl app.receiveClinicianNoteResponse(response: any, action: str) -> None {
     note_result_status: str = responseUiStatus(response, "clinician_note");
     note_status = note_result_status;
     note_error = response["message"] if not response["success"] else "";
@@ -2009,11 +2306,11 @@ impl app.receiveClinicianNoteResponse(response: any) -> None {
         assistant_state = "complete";
         assistant_status = (
             "Clinician note approved"
-            if action == "approve" else
-            "Clinician-review draft ready"
+                if action == "approve"
+                else "Clinician-review draft ready"
         );
         assistant_message = response["message"];
-        backend_connected = intelligence_scenario == "success";
+        backend_connected = True;
     } else {
         assistant_state = "idle";
         assistant_status = "Clinician note needs attention";

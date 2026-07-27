@@ -13,14 +13,9 @@ def:pub ClinicalInsightsScreen(
     patient: dict[str, str],
     facts: list[dict[str, str]],
     decisions: dict[str, str],
-    condition_decisions: dict[str, str],
-    question_decisions: dict[str, str],
     insights_preparing: bool,
     message_visible: bool,
     on_mascot_activate: any,
-    on_condition_review: any,
-    on_condition_not_relevant: any,
-    on_question_status: any,
     on_back: any,
     on_continue: any
 ) -> JsxElement {
@@ -31,18 +26,16 @@ def:pub ClinicalInsightsScreen(
             <ClinicalInsightsIntro/>
             <EncounterProgress patient_name={patient["name"]}/>
             <AssistantSection
-                assistant_state={(
-                    "analyzing" if insights_preparing else "complete"
-                )}
+                assistant_state={("analyzing" if insights_preparing else "complete")}
                 status_text={(
                     "Reviewing the verified details"
-                    if insights_preparing else
-                    "Accepted evidence ready"
+                        if insights_preparing
+                        else "Accepted evidence ready"
                 )}
                 friendly_message={(
                     "Organizing the accepted facts and missing information."
-                    if insights_preparing else
-                    "Return to Live Encounter to run or refresh backend intelligence."
+                        if insights_preparing
+                        else "Return to Live Encounter to run or refresh backend intelligence."
                 )}
                 message_visible={message_visible}
                 on_activate={on_mascot_activate}
@@ -54,23 +47,24 @@ def:pub ClinicalInsightsScreen(
                 facts={facts}
                 decisions={decisions}
             />
-
             {(
                 <div className="clinical-insights-content">
-                    <section className="panel insights-handoff" aria-labelledby="insights-handoff-title">
+                    <section
+                        className="panel insights-handoff"
+                        aria-labelledby="insights-handoff-title"
+                    >
                         <p className="eyebrow">Evidence boundary</p>
-                        <h2 id="insights-handoff-title">No frontend diagnosis is generated</h2>
+                        <h2 id="insights-handoff-title">
+                            No frontend diagnosis is generated
+                        </h2>
                         <p>
-                            Care gaps, suggested questions, conflicts, notes,
-                            plans, and source traces are rendered only from the
-                            documented Verified Intelligence backend actions.
+                            Care gaps, suggested questions, conflicts, notes, plans, and source traces are rendered only from the documented Verified Intelligence backend actions.
                         </p>
                     </section>
                 </div>
-                if insights_available else
-                <ClinicalInsightsIncomplete/>
+                    if insights_available
+                    else <ClinicalInsightsIncomplete/>
             )}
-
             <InsightsNavigation
                 can_continue={insights_available and not insights_preparing}
                 on_back={on_back}

@@ -6,104 +6,86 @@ verified separately against the local development server.
 """
 
 glob TEST_PATIENT: dict[str, str] = {
-    "name": "Elena Marquez",
-    "review_status": "Ready for review"
-};
+         "name": "Elena Marquez",
+         "review_status": "Ready for review"
+     };
 
 glob TEST_TRANSCRIPT: list[dict[str, str]] = [
-    {"speaker_kind": "provider"},
-    {"speaker_kind": "patient"},
-    {"speaker_kind": "provider"},
-    {"speaker_kind": "patient"},
-    {"speaker_kind": "provider"},
-    {"speaker_kind": "patient"},
-    {"speaker_kind": "provider"},
-    {"speaker_kind": "patient"}
-];
+         {"speaker_kind": "provider"},
+         {"speaker_kind": "patient"},
+         {"speaker_kind": "provider"},
+         {"speaker_kind": "patient"},
+         {"speaker_kind": "provider"},
+         {"speaker_kind": "patient"},
+         {"speaker_kind": "provider"},
+         {"speaker_kind": "patient"}
+     ];
 
 glob TEST_FACTS: list[dict[str, str]] = [
-    {"id": "fact-symptom", "category": "Symptom", "value": "Dull ache in the lower back"},
-    {"id": "fact-duration", "category": "Duration", "value": "About ten days"},
-    {"id": "fact-pain", "category": "Pain level", "value": "Usually 4/10; peaked at 6/10"},
-    {"id": "fact-medication", "category": "Medication", "value": "Lisinopril, 10 mg each morning"},
-    {"id": "fact-allergy", "category": "Allergy", "value": "Penicillin — childhood rash"},
-    {"id": "fact-history", "category": "Medical history", "value": "Hypertension"}
-];
+         {
+             "id": "fact-symptom",
+             "category": "Symptom",
+             "value": "Dull ache in the lower back"
+         },
+         {"id": "fact-duration", "category": "Duration", "value": "About ten days"},
+         {
+             "id": "fact-pain",
+             "category": "Pain level",
+             "value": "Usually 4/10; peaked at 6/10"
+         },
+         {
+             "id": "fact-medication",
+             "category": "Medication",
+             "value": "Lisinopril, 10 mg each morning"
+         },
+         {
+             "id": "fact-allergy",
+             "category": "Allergy",
+             "value": "Penicillin — childhood rash"
+         },
+         {"id": "fact-history", "category": "Medical history", "value": "Hypertension"}
+     ];
 
 glob TEST_SCREEN_ORDER: list[str] = [
-    "header",
-    "welcome",
-    "hospi-pet",
-    "encounter",
-    "candidate-facts"
-];
+         "header",
+         "welcome",
+         "hospi-pet",
+         "encounter",
+         "candidate-facts"
+     ];
 
 glob TEST_DOG_LABEL: str = "Hospi-Pet assistant";
 glob TEST_DOG_COMPONENT_COUNT: int = 1;
 glob TEST_SCREEN_DOG_COMPONENTS: list[str] = [
-    "HospiPetDog",
-    "HospiPetDog",
-    "HospiPetDog"
-];
+         "HospiPetDog",
+         "HospiPetDog",
+         "HospiPetDog"
+     ];
 glob TEST_PROGRESS_STATES: list[str] = ["Complete", "Current", "Upcoming"];
 glob TEST_SCREEN3_RESULTS_IMPLEMENTED: bool = True;
-glob TEST_FULL_CARE_PLAN_IMPLEMENTED: bool = False;
-glob TEST_CONDITIONS: list[dict[str, any]] = [
-    {
-        "id": "condition-mechanical-pattern",
-        "title": "Mechanical lower-back pain pattern",
-        "match_level": "Strong",
-        "support_fact_ids": [
-            "fact-symptom",
-            "fact-duration",
-            "fact-pain"
-        ]
-    },
-    {
-        "id": "condition-strain-overuse",
-        "title": "Muscle strain or overuse",
-        "match_level": "Moderate",
-        "support_fact_ids": [
-            "fact-symptom",
-            "fact-duration",
-            "fact-pain"
-        ]
-    }
-];
+glob TEST_FULL_CARE_PLAN_IMPLEMENTED: bool = True;
 glob TEST_QUESTIONS: list[dict[str, str]] = [
-    {"id": "question-radiation", "question": "Does the pain travel into either leg?"},
-    {"id": "question-triggers", "question": "What movements make the pain better or worse?"},
-    {"id": "question-previous", "question": "Has this type of back pain happened before?"},
-    {"id": "question-systemic", "question": "Have there been fever, chills, or unexplained weight changes?"},
-    {"id": "question-function", "question": "How is the pain affecting sleep and daily activity?"}
-];
-glob TEST_WARNING_COPY: str = "No warning signs are included in this demonstration encounter.";
-glob TEST_RESULTS: list[dict[str, any]] = [
-    {
-        "id": "frontend-result-mechanical-pattern",
-        "source_condition_id": "condition-mechanical-pattern",
-        "label": "Likely condition pattern",
-        "title": "Mechanical lower-back pain pattern",
-        "support_fact_ids": [
-            "fact-symptom",
-            "fact-duration",
-            "fact-pain"
-        ],
-        "data_source": "frontend_mock"
-    },
-    {
-        "id": "frontend-result-strain-overuse",
-        "source_condition_id": "condition-strain-overuse",
-        "label": "Likely condition pattern",
-        "title": "Muscle strain or overuse",
-        "support_fact_ids": [
-            "fact-symptom",
-            "fact-duration",
-            "fact-pain"
-        ],
-        "data_source": "frontend_mock"
-    }
-];
+         {
+             "id": "question-radiation",
+             "question": "Does the pain travel into either leg?"
+         },
+         {
+             "id": "question-triggers",
+             "question": "What movements make the pain better or worse?"
+         },
+         {
+             "id": "question-previous",
+             "question": "Has this type of back pain happened before?"
+         },
+         {
+             "id": "question-systemic",
+             "question": "Have there been fever, chills, or unexplained weight changes?"
+         },
+         {
+             "id": "question-function",
+             "question": "How is the pain affecting sleep and daily activity?"
+         }
+     ];
 
 
 def blankFactDecisions -> dict[str, str] {
@@ -119,21 +101,11 @@ def blankFactDecisions -> dict[str, str] {
 
 
 def updateFactDecision(
-    decisions: dict[str, str],
-    fact_id: str,
-    decision: str
+    decisions: dict[str, str], fact_id: str, decision: str
 ) -> dict[str, str] {
     updated: dict[str, str] = decisions.copy();
     updated[fact_id] = decision;
     return updated;
-}
-
-
-def blankConditionDecisions -> dict[str, str] {
-    return {
-        "condition-mechanical-pattern": "neutral",
-        "condition-strain-overuse": "neutral"
-    };
 }
 
 
@@ -148,60 +120,12 @@ def blankQuestionDecisions -> dict[str, str] {
 }
 
 
-def updateConditionDecision(
-    decisions: dict[str, str],
-    condition_id: str,
-    decision: str
-) -> dict[str, str] {
-    updated: dict[str, str] = decisions.copy();
-    updated[condition_id] = decision;
-    return updated;
-}
-
-
 def updateQuestionDecision(
-    decisions: dict[str, str],
-    question_id: str,
-    decision: str
+    decisions: dict[str, str], question_id: str, decision: str
 ) -> dict[str, str] {
     updated: dict[str, str] = decisions.copy();
     updated[question_id] = decision;
     return updated;
-}
-
-
-def reviewedConditionId(
-    conditions: list[dict[str, any]],
-    decisions: dict[str, str]
-) -> str {
-    for condition in conditions {
-        if decisions[condition["id"]] == "review" {
-            return condition["id"];
-        }
-    }
-    return "";
-}
-
-
-def canContinueToResults(
-    insights_preparing: bool,
-    conditions: list[dict[str, any]],
-    decisions: dict[str, str]
-) -> bool {
-    return (
-        not insights_preparing
-        and len(reviewedConditionId(conditions, decisions)) > 0
-    );
-}
-
-
-def mockResultForCondition(condition_id: str) -> dict[str, any] {
-    for result in TEST_RESULTS {
-        if result["source_condition_id"] == condition_id {
-            return result;
-        }
-    }
-    return {};
 }
 
 
@@ -262,9 +186,7 @@ def motionEnabled(prefers_reduced_motion: bool) -> bool {
 
 
 def dogShouldRun(
-    current_screen: str,
-    insights_preparing: bool,
-    prefers_reduced_motion: bool
+    current_screen: str, insights_preparing: bool, prefers_reduced_motion: bool
 ) -> bool {
     return (
         current_screen == "insights"
@@ -274,10 +196,7 @@ def dogShouldRun(
 }
 
 
-def dogPose(
-    running: bool,
-    interaction_active: bool
-) -> str {
+def dogPose(running: bool, interaction_active: bool) -> str {
     if interaction_active {
         return "seated";
     } elif running {
@@ -293,15 +212,9 @@ def insightsPreparationDelay -> float {
 
 
 def dogLayoutStable(
-    width_before: float,
-    width_after: float,
-    height_before: float,
-    height_after: float
+    width_before: float, width_after: float, height_before: float, height_after: float
 ) -> bool {
-    return (
-        width_before == width_after
-        and height_before == height_after
-    );
+    return (width_before == width_after and height_before == height_after);
 }
 
 
@@ -310,26 +223,17 @@ def toggleMascotMessage(message_visible: bool) -> bool {
 }
 
 
-def mascotMessageVisible(
-    is_hovered: bool,
-    message_toggled: bool
-) -> bool {
+def mascotMessageVisible(is_hovered: bool, message_toggled: bool) -> bool {
     return is_hovered or message_toggled;
 }
 
 
-def mascotTailWagActive(
-    is_hovered: bool,
-    message_toggled: bool
-) -> bool {
+def mascotTailWagActive(is_hovered: bool, message_toggled: bool) -> bool {
     return is_hovered or message_toggled;
 }
 
 
-def verifiedFactCount(
-    facts: list[dict[str, str]],
-    decisions: dict[str, str]
-) -> int {
+def verifiedFactCount(facts: list[dict[str, str]], decisions: dict[str, str]) -> int {
     count: int = 0;
     for fact in facts {
         if decisions[fact["id"]] == "accepted" {
@@ -341,9 +245,7 @@ def verifiedFactCount(
 
 
 def acceptedFactValue(
-    facts: list[dict[str, str]],
-    decisions: dict[str, str],
-    fact_id: str
+    facts: list[dict[str, str]], decisions: dict[str, str], fact_id: str
 ) -> str {
     for fact in facts {
         if fact["id"] == fact_id and decisions[fact_id] == "accepted" {
@@ -355,16 +257,11 @@ def acceptedFactValue(
 
 
 def acceptedEvidenceValues(
-    facts: list[dict[str, str]],
-    decisions: dict[str, str],
-    fact_ids: list[str]
+    facts: list[dict[str, str]], decisions: dict[str, str], fact_ids: list[str]
 ) -> list[str] {
     evidence: list[str] = [];
     for fact in facts {
-        if (
-            fact["id"] in fact_ids
-            and decisions[fact["id"]] == "accepted"
-        ) {
+        if (fact["id"] in fact_ids and decisions[fact["id"]] == "accepted") {
             evidence.append(fact["category"] + ": " + fact["value"]);
         }
     }
@@ -373,8 +270,7 @@ def acceptedEvidenceValues(
 
 
 def hasEnoughVerifiedFacts(
-    facts: list[dict[str, str]],
-    decisions: dict[str, str]
+    facts: list[dict[str, str]], decisions: dict[str, str]
 ) -> bool {
     return (
         verifiedFactCount(facts, decisions) >= 3
@@ -384,9 +280,7 @@ def hasEnoughVerifiedFacts(
 
 
 def canContinueToInsights(
-    demo_loaded: bool,
-    is_transitioning: bool,
-    facts_loaded: bool
+    demo_loaded: bool, is_transitioning: bool, facts_loaded: bool
 ) -> bool {
     return demo_loaded and not is_transitioning and facts_loaded;
 }
@@ -443,9 +337,7 @@ test "analyzing advances to complete with facts ready" {
 
 test "Accept marks a fact accepted" {
     decisions: dict[str, str] = updateFactDecision(
-        blankFactDecisions(),
-        "fact-symptom",
-        "accepted"
+        blankFactDecisions(), "fact-symptom", "accepted"
     );
     assert decisions["fact-symptom"] == "accepted";
 }
@@ -453,9 +345,7 @@ test "Accept marks a fact accepted" {
 
 test "Reject marks a fact rejected" {
     decisions: dict[str, str] = updateFactDecision(
-        blankFactDecisions(),
-        "fact-allergy",
-        "rejected"
+        blankFactDecisions(), "fact-allergy", "rejected"
     );
     assert decisions["fact-allergy"] == "rejected";
 }
@@ -463,24 +353,16 @@ test "Reject marks a fact rejected" {
 
 test "a fact decision can be changed" {
     accepted: dict[str, str] = updateFactDecision(
-        blankFactDecisions(),
-        "fact-pain",
-        "accepted"
+        blankFactDecisions(), "fact-pain", "accepted"
     );
-    rejected: dict[str, str] = updateFactDecision(
-        accepted,
-        "fact-pain",
-        "rejected"
-    );
+    rejected: dict[str, str] = updateFactDecision(accepted, "fact-pain", "rejected");
     assert rejected["fact-pain"] == "rejected";
 }
 
 
 test "Reset Demo restores neutral fact decisions" {
     decided: dict[str, str] = updateFactDecision(
-        blankFactDecisions(),
-        "fact-history",
-        "accepted"
+        blankFactDecisions(), "fact-history", "accepted"
     );
     reset: dict[str, str] = blankFactDecisions();
     assert decided["fact-history"] == "accepted";
@@ -649,24 +531,15 @@ test "Screen 2 summary includes only accepted values" {
     decisions = updateFactDecision(decisions, "fact-symptom", "accepted");
     decisions = updateFactDecision(decisions, "fact-allergy", "rejected");
     assert (
-        acceptedFactValue(TEST_FACTS, decisions, "fact-symptom")
-        == "Dull ache in the lower back"
+        acceptedFactValue(TEST_FACTS, decisions, "fact-symptom") == "Dull ache in the lower back"
     );
-    assert (
-        acceptedFactValue(TEST_FACTS, decisions, "fact-allergy")
-        == "Not verified"
-    );
+    assert (acceptedFactValue(TEST_FACTS, decisions, "fact-allergy") == "Not verified");
 }
 
 
 test "unresolved Screen 1 facts display Not verified" {
     assert (
-        acceptedFactValue(
-            TEST_FACTS,
-            blankFactDecisions(),
-            "fact-medication"
-        )
-        == "Not verified"
+        acceptedFactValue(TEST_FACTS, blankFactDecisions(), "fact-medication") == "Not verified"
     );
 }
 
@@ -691,9 +564,7 @@ test "Clinical Insights remains incomplete without verified symptom" {
 
 test "fact decisions survive Screen 1 and Screen 2 navigation" {
     decisions: dict[str, str] = updateFactDecision(
-        blankFactDecisions(),
-        "fact-history",
-        "accepted"
+        blankFactDecisions(), "fact-history", "accepted"
     );
     current_screen: str = "insights";
     current_screen = "verification";
@@ -716,9 +587,9 @@ test "Back to Verification returns to Screen 1" {
 }
 
 
-test "full Care Plan remains unimplemented after simplified Results screen" {
+test "Verified Encounter Review includes the full care plan" {
     assert TEST_SCREEN3_RESULTS_IMPLEMENTED;
-    assert not TEST_FULL_CARE_PLAN_IMPLEMENTED;
+    assert TEST_FULL_CARE_PLAN_IMPLEMENTED;
 }
 
 
@@ -728,9 +599,7 @@ test "Prompt 10 Screen 2 receives accepted Screen 1 facts" {
     decisions = updateFactDecision(decisions, "fact-duration", "accepted");
     decisions = updateFactDecision(decisions, "fact-pain", "accepted");
     evidence: list[str] = acceptedEvidenceValues(
-        TEST_FACTS,
-        decisions,
-        TEST_CONDITIONS[0]["support_fact_ids"]
+        TEST_FACTS, decisions, ["fact-symptom", "fact-duration", "fact-pain"]
     );
     assert len(evidence) == 3;
     assert evidence[0] == "Symptom: Dull ache in the lower back";
@@ -742,9 +611,7 @@ test "Prompt 10 rejected facts are excluded from verified evidence" {
     decisions = updateFactDecision(decisions, "fact-symptom", "accepted");
     decisions = updateFactDecision(decisions, "fact-duration", "rejected");
     evidence: list[str] = acceptedEvidenceValues(
-        TEST_FACTS,
-        decisions,
-        TEST_CONDITIONS[0]["support_fact_ids"]
+        TEST_FACTS, decisions, ["fact-symptom", "fact-duration", "fact-pain"]
     );
     assert len(evidence) == 1;
     assert acceptedFactValue(TEST_FACTS, decisions, "fact-duration") == "Not verified";
@@ -758,62 +625,6 @@ test "Prompt 10 unverified summary fields display correctly" {
 }
 
 
-test "Prompt 10 possible conditions render from structured mock data" {
-    assert len(TEST_CONDITIONS) == 2;
-    assert TEST_CONDITIONS[0]["title"] == "Mechanical lower-back pain pattern";
-    assert TEST_CONDITIONS[1]["match_level"] == "Moderate";
-}
-
-
-test "Prompt 10 condition evidence renders accepted values" {
-    decisions: dict[str, str] = blankFactDecisions();
-    decisions = updateFactDecision(decisions, "fact-symptom", "accepted");
-    evidence: list[str] = acceptedEvidenceValues(
-        TEST_FACTS,
-        decisions,
-        TEST_CONDITIONS[1]["support_fact_ids"]
-    );
-    assert len(evidence) == 1;
-    assert "Dull ache in the lower back" in evidence[0];
-}
-
-
-test "Prompt 10 Review marks a condition under review" {
-    decisions: dict[str, str] = updateConditionDecision(
-        blankConditionDecisions(),
-        "condition-mechanical-pattern",
-        "review"
-    );
-    assert decisions["condition-mechanical-pattern"] == "review";
-}
-
-
-test "Prompt 10 Not Relevant marks a condition without deleting it" {
-    decisions: dict[str, str] = updateConditionDecision(
-        blankConditionDecisions(),
-        "condition-strain-overuse",
-        "not_relevant"
-    );
-    assert decisions["condition-strain-overuse"] == "not_relevant";
-    assert len(TEST_CONDITIONS) == 2;
-}
-
-
-test "Prompt 10 condition decisions can be changed" {
-    decisions: dict[str, str] = updateConditionDecision(
-        blankConditionDecisions(),
-        "condition-mechanical-pattern",
-        "review"
-    );
-    decisions = updateConditionDecision(
-        decisions,
-        "condition-mechanical-pattern",
-        "not_relevant"
-    );
-    assert decisions["condition-mechanical-pattern"] == "not_relevant";
-}
-
-
 test "Prompt 10 clinical questions render" {
     assert len(TEST_QUESTIONS) == 5;
     assert TEST_QUESTIONS[0]["id"] == "question-radiation";
@@ -822,9 +633,7 @@ test "Prompt 10 clinical questions render" {
 
 test "Prompt 10 Ask Next updates question status" {
     decisions: dict[str, str] = updateQuestionDecision(
-        blankQuestionDecisions(),
-        "question-radiation",
-        "ask_next"
+        blankQuestionDecisions(), "question-radiation", "ask_next"
     );
     assert decisions["question-radiation"] == "ask_next";
 }
@@ -832,9 +641,7 @@ test "Prompt 10 Ask Next updates question status" {
 
 test "Prompt 10 Asked updates question status" {
     decisions: dict[str, str] = updateQuestionDecision(
-        blankQuestionDecisions(),
-        "question-triggers",
-        "asked"
+        blankQuestionDecisions(), "question-triggers", "asked"
     );
     assert decisions["question-triggers"] == "asked";
 }
@@ -842,9 +649,7 @@ test "Prompt 10 Asked updates question status" {
 
 test "Prompt 10 Not Needed updates question status" {
     decisions: dict[str, str] = updateQuestionDecision(
-        blankQuestionDecisions(),
-        "question-systemic",
-        "not_needed"
+        blankQuestionDecisions(), "question-systemic", "not_needed"
     );
     assert decisions["question-systemic"] == "not_needed";
 }
@@ -852,102 +657,28 @@ test "Prompt 10 Not Needed updates question status" {
 
 test "Prompt 10 question statuses can be changed" {
     decisions: dict[str, str] = updateQuestionDecision(
-        blankQuestionDecisions(),
-        "question-function",
-        "ask_next"
+        blankQuestionDecisions(), "question-function", "ask_next"
     );
-    decisions = updateQuestionDecision(
-        decisions,
-        "question-function",
-        "asked"
-    );
+    decisions = updateQuestionDecision(decisions, "question-function", "asked");
     assert decisions["question-function"] == "asked";
-}
-
-
-test "Prompt 10 warning-sign section uses the safe empty state" {
-    assert TEST_WARNING_COPY == "No warning signs are included in this demonstration encounter.";
 }
 
 
 test "Prompt 10 Back to Verification preserves all review state" {
     fact_decisions: dict[str, str] = updateFactDecision(
-        blankFactDecisions(),
-        "fact-symptom",
-        "accepted"
-    );
-    condition_decisions: dict[str, str] = updateConditionDecision(
-        blankConditionDecisions(),
-        "condition-mechanical-pattern",
-        "review"
+        blankFactDecisions(), "fact-symptom", "accepted"
     );
     question_decisions: dict[str, str] = updateQuestionDecision(
-        blankQuestionDecisions(),
-        "question-radiation",
-        "ask_next"
+        blankQuestionDecisions(), "question-radiation", "ask_next"
     );
     current_screen: str = "insights";
     current_screen = "verification";
     assert fact_decisions["fact-symptom"] == "accepted";
-    assert condition_decisions["condition-mechanical-pattern"] == "review";
     assert question_decisions["question-radiation"] == "ask_next";
 }
 
 
-test "Prompt 10 review state now enables simplified Screen 3" {
-    current_screen: str = "insights";
-    condition_decisions: dict[str, str] = updateConditionDecision(
-        blankConditionDecisions(),
-        "condition-mechanical-pattern",
-        "review"
-    );
-    continue_enabled: bool = canContinueToResults(
-        False,
-        TEST_CONDITIONS,
-        condition_decisions
-    );
-    assert continue_enabled;
-    current_screen = "results";
-    assert current_screen == "results";
-}
-
-
-test "Prompt 12 Results navigation waits for reviewed possibility" {
-    assert not canContinueToResults(
-        False,
-        TEST_CONDITIONS,
-        blankConditionDecisions()
-    );
-    decisions: dict[str, str] = updateConditionDecision(
-        blankConditionDecisions(),
-        "condition-mechanical-pattern",
-        "review"
-    );
-    assert not canContinueToResults(True, TEST_CONDITIONS, decisions);
-    assert canContinueToResults(False, TEST_CONDITIONS, decisions);
-}
-
-
-test "Prompt 12 reviewed possibility selects frontend result adapter" {
-    decisions: dict[str, str] = updateConditionDecision(
-        blankConditionDecisions(),
-        "condition-mechanical-pattern",
-        "review"
-    );
-    condition_id: str = reviewedConditionId(TEST_CONDITIONS, decisions);
-    result: dict[str, any] = mockResultForCondition(condition_id);
-    assert result["title"] == "Mechanical lower-back pain pattern";
-    assert result["data_source"] == "frontend_mock";
-}
-
-
-test "Prompt 12 result uses cautious clinical language" {
-    assert TEST_RESULTS[0]["label"] == "Likely condition pattern";
-    assert "Confirmed diagnosis" not in TEST_RESULTS[0]["label"];
-}
-
-
-test "Prompt 12 result supports loading success error and missing states" {
+test "Verified Encounter Review supports loading success error and missing states" {
     statuses: list[str] = ["loading", "success", "error", "missing"];
     assert len(statuses) == 4;
     assert "error" in statuses;
@@ -955,49 +686,22 @@ test "Prompt 12 result supports loading success error and missing states" {
 }
 
 
-test "Prompt 12 supporting details include only accepted facts" {
+test "Verified Encounter Review supporting details include only accepted facts" {
     decisions: dict[str, str] = blankFactDecisions();
     decisions = updateFactDecision(decisions, "fact-symptom", "accepted");
     decisions = updateFactDecision(decisions, "fact-duration", "rejected");
-    result: dict[str, any] = TEST_RESULTS[0];
     evidence: list[str] = acceptedEvidenceValues(
-        TEST_FACTS,
-        decisions,
-        result["support_fact_ids"]
+        TEST_FACTS, decisions, ["fact-symptom", "fact-duration", "fact-pain"]
     );
     assert len(evidence) == 1;
     assert "Dull ache in the lower back" in evidence[0];
 }
 
 
-test "Prompt 12 missing adapter produces recoverable result error" {
-    result: dict[str, any] = mockResultForCondition("condition-not-mapped");
-    status: str = "success" if "id" in result else "error";
-    assert "id" not in result;
-    assert status == "error";
-}
-
-
-test "Prompt 12 missing review produces missing result state" {
-    condition_id: str = reviewedConditionId(
-        TEST_CONDITIONS,
-        blankConditionDecisions()
-    );
-    status: str = "missing" if len(condition_id) == 0 else "loading";
-    assert status == "missing";
-}
-
-
-test "Prompt 12 Back to Clinical Insights preserves review decisions" {
-    decisions: dict[str, str] = updateConditionDecision(
-        blankConditionDecisions(),
-        "condition-strain-overuse",
-        "review"
-    );
+test "Prompt 12 Back to Clinical Insights preserves verified review" {
     current_screen: str = "results";
     current_screen = "insights";
     assert current_screen == "insights";
-    assert decisions["condition-strain-overuse"] == "review";
 }
 
 
@@ -1021,9 +725,9 @@ test "Prompt 12 progress is complete complete current" {
 }
 
 
-test "Prompt 12 Complete Encounter remains intentionally disabled" {
+test "Complete Encounter is enabled by the integrated care plan" {
     complete_encounter_enabled: bool = TEST_FULL_CARE_PLAN_IMPLEMENTED;
-    assert not complete_encounter_enabled;
+    assert complete_encounter_enabled;
 }
 
 
@@ -1137,97 +841,97 @@ test "Prompt 11 transforms preserve dog layout dimensions" {
 
 # Revised Prompt 4: dependency-free multimodal state fixtures and assertions.
 glob MM_CONTRACT_RESPONSE_FIELDS: list[str] = [
-    "success",
-    "error_code",
-    "message",
-    "recoverable",
-    "current_graph_version",
-    "ai_status",
-    "extracted_candidates",
-    "demo_state",
-    "candidate_facts",
-    "verified_fact",
-    "care_graph",
-    "care_gaps",
-    "patient_plan",
-    "patient_answer",
-    "conflicts",
-    "created_graph_ids",
-    "traversal_trace",
-    "provenance_chains",
-    "capture_session",
-    "transcript_chunk",
-    "transcript_chunks",
-    "source_artifact",
-    "document_text_blocks",
-    "multimodal_candidates",
-    "clinician_note",
-    "timeline",
-    "patient_audio_script",
-    "multimodal_provenance"
-];
+         "success",
+         "error_code",
+         "message",
+         "recoverable",
+         "current_graph_version",
+         "ai_status",
+         "extracted_candidates",
+         "demo_state",
+         "candidate_facts",
+         "verified_fact",
+         "care_graph",
+         "care_gaps",
+         "patient_plan",
+         "patient_answer",
+         "conflicts",
+         "created_graph_ids",
+         "traversal_trace",
+         "provenance_chains",
+         "capture_session",
+         "transcript_chunk",
+         "transcript_chunks",
+         "source_artifact",
+         "document_text_blocks",
+         "multimodal_candidates",
+         "clinician_note",
+         "timeline",
+         "patient_audio_script",
+         "multimodal_provenance"
+     ];
 
 glob MM_VOICE_CANDIDATES: list[dict[str, any]] = [
-    {
-        "id": "candidate-lab",
-        "category": "lab_order",
-        "value": "blood test; due this week",
-        "source_chunk_id": "chunk-1",
-        "source_text": "We will order a blood test to be completed this week.",
-        "confidence": 1.0,
-        "status": "pending",
-        "created_at": "2026-07-26T18:00:01Z"
-    },
-    {
-        "id": "candidate-follow-up",
-        "category": "follow_up",
-        "value": "return in two weeks",
-        "source_chunk_id": "chunk-2",
-        "source_text": "Please return in two weeks so we can review the results.",
-        "confidence": 1.0,
-        "status": "pending",
-        "created_at": "2026-07-26T18:00:02Z"
-    }
-];
+         {
+             "id": "candidate-lab",
+             "category": "lab_order",
+             "value": "blood test; due this week",
+             "source_chunk_id": "chunk-1",
+             "source_text": "We will order a blood test to be completed this week.",
+             "confidence": 1.0,
+             "status": "pending",
+             "created_at": "2026-07-26T18:00:01Z"
+         },
+         {
+             "id": "candidate-follow-up",
+             "category": "follow_up",
+             "value": "return in two weeks",
+             "source_chunk_id": "chunk-2",
+             "source_text": "Please return in two weeks so we can review the results.",
+             "confidence": 1.0,
+             "status": "pending",
+             "created_at": "2026-07-26T18:00:02Z"
+         }
+     ];
 
 glob MM_DOCUMENT_CANDIDATES: list[dict[str, any]] = [
-    {
-        "id": "candidate-document-lab",
-        "category": "lab_order",
-        "value": "complete blood count; due this week",
-        "confidence": 0.96,
-        "status": "pending",
-        "source_kind": "document",
-        "source_artifact_id": "artifact-demo-default-lab-document",
-        "source_chunk_id": "",
-        "source_text_block_id": "block-demo-default-lab-1",
-        "source_text": "Order: Complete blood count\nTiming: This week",
-        "source_region": "0,0,100,20",
-        "created_at": "2026-07-26T18:10:01Z"
-    }
-];
+         {
+             "id": "candidate-document-lab",
+             "category": "lab_order",
+             "value": "complete blood count; due this week",
+             "confidence": 0.96,
+             "status": "pending",
+             "source_kind": "document",
+             "source_artifact_id": "artifact-demo-default-lab-document",
+             "source_chunk_id": "",
+             "source_text_block_id": "block-demo-default-lab-1",
+             "source_text": "Order: Complete blood count\nTiming: This week",
+             "source_region": "0,0,100,20",
+             "created_at": "2026-07-26T18:10:01Z"
+         }
+     ];
 
 glob MM_CONFLICT_CANDIDATE: dict[str, any] = {
-    "id": "candidate-document-follow-up-conflict",
-    "category": "follow_up",
-    "value": "return in four weeks",
-    "confidence": 0.91,
-    "status": "pending",
-    "source_kind": "document",
-    "source_artifact_id": "artifact-demo-default-after-visit-document",
-    "source_chunk_id": "",
-    "source_text_block_id": "block-demo-default-after-visit-1",
-    "source_text": "Follow-up instruction: Return in four weeks to review results.",
-    "source_region": "0,0,100,18",
-    "created_at": "2026-07-26T18:10:03Z"
-};
+         "id": "candidate-document-follow-up-conflict",
+         "category": "follow_up",
+         "value": "return in four weeks",
+         "confidence": 0.91,
+         "status": "pending",
+         "source_kind": "document",
+         "source_artifact_id": "artifact-demo-default-after-visit-document",
+         "source_chunk_id": "",
+         "source_text_block_id": "block-demo-default-after-visit-1",
+         "source_text": "Follow-up instruction: Return in four weeks to review results.",
+         "source_region": "0,0,100,18",
+         "created_at": "2026-07-26T18:10:03Z"
+     };
 
 glob MM_EXTRACTION_STAGES: list[str] = [
-    "preparing_image",
-    "reading_document",
-    "creating_candidates",
-    "ready_for_review"
-];
+         "preparing_image",
+         "reading_document",
+         "creating_candidates",
+         "ready_for_review"
+     ];
 
 glob MM_BROWSER_CLOUD_CALLS: list[str] = [];
 glob MM_API_KEYS: list[str] = [];
@@ -1238,17 +942,14 @@ def mmFormatTime(seconds: int) -> str {
     minutes: int = seconds // 60;
     remainder: int = seconds % 60;
     return (
-        (("0" if minutes < 10 else "") + str(minutes))
-        + ":"
-        + (("0" if remainder < 10 else "") + str(remainder))
+        (("0" if minutes < 10 else "") + str(minutes)) + ":" + (
+            ("0" if remainder < 10 else "") + str(remainder)
+        )
     );
 }
 
 
-def mmDecision(
-    decisions: dict[str, str],
-    candidate_id: str
-) -> str {
+def mmDecision(decisions: dict[str, str], candidate_id: str) -> str {
     if candidate_id in decisions {
         return decisions[candidate_id];
     }
@@ -1257,8 +958,7 @@ def mmDecision(
 
 
 def mmAccepted(
-    candidates: list[dict[str, any]],
-    decisions: dict[str, str]
+    candidates: list[dict[str, any]], decisions: dict[str, str]
 ) -> list[dict[str, any]] {
     result: list[dict[str, any]] = [];
     for candidate in candidates {
@@ -1270,17 +970,11 @@ def mmAccepted(
 }
 
 
-def mmSourceCount(
-    candidates: list[dict[str, any]],
-    decisions: dict[str, str]
-) -> int {
+def mmSourceCount(candidates: list[dict[str, any]], decisions: dict[str, str]) -> int {
     source_ids: list[str] = [];
     for candidate in mmAccepted(candidates, decisions) {
         source_id: str = candidate["source_chunk_id"];
-        if (
-            len(source_id) == 0
-            and "source_text_block_id" in candidate
-        ) {
+        if (len(source_id) == 0 and "source_text_block_id" in candidate) {
             source_id = candidate["source_text_block_id"];
         }
         if source_id not in source_ids {
@@ -1291,10 +985,7 @@ def mmSourceCount(
 }
 
 
-def mmHasConflict(
-    candidates: list[dict[str, any]],
-    decisions: dict[str, str]
-) -> bool {
+def mmHasConflict(candidates: list[dict[str, any]], decisions: dict[str, str]) -> bool {
     follow_ups: list[str] = [];
     for candidate in mmAccepted(candidates, decisions) {
         if (
@@ -1538,8 +1229,7 @@ test "Prompt 4 extracted text is not silently altered" {
 
 test "Prompt 4 document candidate retains source identifier" {
     assert (
-        MM_DOCUMENT_CANDIDATES[0]["source_text_block_id"]
-        == "block-demo-default-lab-1"
+        MM_DOCUMENT_CANDIDATES[0]["source_text_block_id"] == "block-demo-default-lab-1"
     );
 }
 
@@ -1771,8 +1461,7 @@ test "Verified review keeps scopes visually separate" {
 
 test "Stale analysis warning matches the contract exactly" {
     assert (
-        "New verified information is available. Re-run analysis."
-        == "New verified information is available. Re-run analysis."
+        "New verified information is available. Re-run analysis." == "New verified information is available. Re-run analysis."
     );
 }
 

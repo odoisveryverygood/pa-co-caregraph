@@ -1,6 +1,5 @@
 """Small safety disclaimer for the hackathon prototype."""
 
-
 def:pub ProjectFooter -> JsxElement {
     return
         <footer className="project-footer">

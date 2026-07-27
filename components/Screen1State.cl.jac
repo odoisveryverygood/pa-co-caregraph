@@ -1,6 +1,5 @@
 """Pure Screen 1 state helpers shared by the UI and frontend tests."""
 
-
 def:pub blankFactDecisions -> dict[str, str] {
     return {
         "fact-symptom": "neutral",
@@ -33,9 +32,7 @@ def:pub blankQuestionDecisions -> dict[str, str] {
 
 
 def:pub updateFactDecision(
-    decisions: dict[str, str],
-    fact_id: str,
-    decision: str
+    decisions: dict[str, str], fact_id: str, decision: str
 ) -> dict[str, str] {
     updated: dict[str, str] = decisions.copy();
     updated[fact_id] = decision;
@@ -44,9 +41,7 @@ def:pub updateFactDecision(
 
 
 def:pub updateConditionDecision(
-    decisions: dict[str, str],
-    condition_id: str,
-    decision: str
+    decisions: dict[str, str], condition_id: str, decision: str
 ) -> dict[str, str] {
     updated: dict[str, str] = decisions.copy();
     updated[condition_id] = decision;
@@ -55,9 +50,7 @@ def:pub updateConditionDecision(
 
 
 def:pub updateQuestionDecision(
-    decisions: dict[str, str],
-    question_id: str,
-    decision: str
+    decisions: dict[str, str], question_id: str, decision: str
 ) -> dict[str, str] {
     updated: dict[str, str] = decisions.copy();
     updated[question_id] = decision;
@@ -126,25 +119,18 @@ def:pub toggleMascotMessage(message_visible: bool) -> bool {
 }
 
 
-def:pub mascotMessageVisible(
-    is_hovered: bool,
-    message_toggled: bool
-) -> bool {
+def:pub mascotMessageVisible(is_hovered: bool, message_toggled: bool) -> bool {
     return is_hovered or message_toggled;
 }
 
 
-def:pub mascotTailWagActive(
-    is_hovered: bool,
-    message_toggled: bool
-) -> bool {
+def:pub mascotTailWagActive(is_hovered: bool, message_toggled: bool) -> bool {
     return is_hovered or message_toggled;
 }
 
 
 def:pub verifiedFactCount(
-    facts: list[dict[str, str]],
-    decisions: dict[str, str]
+    facts: list[dict[str, str]], decisions: dict[str, str]
 ) -> int {
     count: int = 0;
     for fact in facts {
@@ -157,15 +143,10 @@ def:pub verifiedFactCount(
 
 
 def:pub acceptedFactValue(
-    facts: list[dict[str, str]],
-    decisions: dict[str, str],
-    fact_id: str
+    facts: list[dict[str, str]], decisions: dict[str, str], fact_id: str
 ) -> str {
     for fact in facts {
-        if (
-            fact["id"] == fact_id
-            and decisions[fact_id] == "accepted"
-        ) {
+        if (fact["id"] == fact_id and decisions[fact_id] == "accepted") {
             return fact["value"];
         }
     }
@@ -174,16 +155,11 @@ def:pub acceptedFactValue(
 
 
 def:pub acceptedEvidenceValues(
-    facts: list[dict[str, str]],
-    decisions: dict[str, str],
-    fact_ids: list[str]
+    facts: list[dict[str, str]], decisions: dict[str, str], fact_ids: list[str]
 ) -> list[str] {
     evidence: list[str] = [];
     for fact in facts {
-        if (
-            fact["id"] in fact_ids
-            and decisions[fact["id"]] == "accepted"
-        ) {
+        if (fact["id"] in fact_ids and decisions[fact["id"]] == "accepted") {
             evidence.append(fact["category"] + ": " + fact["value"]);
         }
     }
@@ -192,8 +168,7 @@ def:pub acceptedEvidenceValues(
 
 
 def:pub hasEnoughVerifiedFacts(
-    facts: list[dict[str, str]],
-    decisions: dict[str, str]
+    facts: list[dict[str, str]], decisions: dict[str, str]
 ) -> bool {
     return (
         verifiedFactCount(facts, decisions) >= 3
@@ -203,9 +178,7 @@ def:pub hasEnoughVerifiedFacts(
 
 
 def:pub canContinueToInsights(
-    demo_loaded: bool,
-    is_transitioning: bool,
-    facts_loaded: bool
+    demo_loaded: bool, is_transitioning: bool, facts_loaded: bool
 ) -> bool {
     return demo_loaded and not is_transitioning and facts_loaded;
 }

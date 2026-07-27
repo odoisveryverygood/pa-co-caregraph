@@ -4,9 +4,7 @@ import from .Screen1State { acceptedFactValue, verifiedFactCount }
 
 
 def:pub VerifiedPatientSummary(
-    patient: dict[str, str],
-    facts: list[dict[str, str]],
-    decisions: dict[str, str]
+    patient: dict[str, str], facts: list[dict[str, str]], decisions: dict[str, str]
 ) -> JsxElement {
     symptom: str = acceptedFactValue(facts, decisions, "fact-symptom");
     duration: str = acceptedFactValue(facts, decisions, "fact-duration");
@@ -17,24 +15,23 @@ def:pub VerifiedPatientSummary(
     verified_count: int = verifiedFactCount(facts, decisions);
 
     return
-        <section className="panel verified-summary" aria-labelledby="verified-summary-heading">
+        <section
+            className="panel verified-summary"
+            aria-labelledby="verified-summary-heading"
+        >
             <div className="section-heading">
                 <div>
                     <p className="eyebrow">Accepted information only</p>
                     <h2 id="verified-summary-heading">Verified Patient Summary</h2>
                 </div>
-                <span className="section-chip">
-                    {str(verified_count)} verified
-                </span>
+                <span className="section-chip">{str(verified_count)} verified</span>
             </div>
-
             <div className="verified-summary__lead">
                 <p>Patient</p>
                 <strong>{patient["name"]}</strong>
                 <span>Main complaint</span>
                 <h3>{symptom}</h3>
             </div>
-
             <dl className="verified-summary__clinical">
                 <div>
                     <dt>Confirmed symptoms</dt>
@@ -49,7 +46,6 @@ def:pub VerifiedPatientSummary(
                     <dd>{pain}</dd>
                 </div>
             </dl>
-
             <dl className="verified-summary__details">
                 <div>
                     <dt>Medications</dt>

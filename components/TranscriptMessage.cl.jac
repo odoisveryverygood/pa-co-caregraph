@@ -1,6 +1,5 @@
 """One timestamped message in the consultation transcript."""
 
-
 def:pub TranscriptMessage(
     source_id: str,
     speaker: str,
@@ -13,11 +12,9 @@ def:pub TranscriptMessage(
     return
         <article
             id={"source-" + source_id}
-            className={
-                "transcript-message transcript-message--"
-                + speaker_kind
-                + (" source-highlight" if highlighted else "")
-            }
+            className={"transcript-message transcript-message--" + speaker_kind + (
+                " source-highlight" if highlighted else ""
+            )}
             tabIndex={-1}
             aria-label={speaker + " transcript message"}
         >

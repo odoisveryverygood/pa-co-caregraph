@@ -28,7 +28,6 @@ def:pub Header(
                         <p className="screen-label">{screen_label}</p>
                     </div>
                 </div>
-
                 <DemoControls
                     load_demo={load_demo}
                     reset_demo={reset_demo}

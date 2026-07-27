@@ -16,40 +16,40 @@ def:pub FactCard(
     source_id: str = candidateSourceId(fact);
     source_label: str = (
         source_metadata[source_id]["source_label"]
-        if source_id in source_metadata else
-        "Consultation transcript"
+            if source_id in source_metadata
+            else "Consultation transcript"
     );
     source_type: str = (
         source_metadata[source_id]["source_type"]
-        if source_id in source_metadata else
-        "Live transcript"
+            if source_id in source_metadata
+            else "Live transcript"
     );
     status_label: str = (
-        "Accepted" if decision == "accepted"
-        else ("Rejected" if decision == "rejected" else "Unverified")
+        "Accepted"
+            if decision == "accepted"
+            else ("Rejected" if decision == "rejected" else "Unverified")
     );
     status_symbol: str = (
-        "✓" if decision == "accepted"
-        else ("×" if decision == "rejected" else "○")
+        "✓" if decision == "accepted" else ("×" if decision == "rejected" else "○")
     );
 
     return
         <article className={"fact-card fact-card--" + decision}>
             <div className="fact-card__topline">
                 <span className="fact-card__category">{category_label}</span>
-                <span className={"fact-card__status fact-card__status--" + decision} role="status">
+                <span
+                    className={"fact-card__status fact-card__status--" + decision}
+                    role="status"
+                >
                     <span aria-hidden="true">{status_symbol}</span>
                     {status_label}
                 </span>
             </div>
-
             <h3>{fact["value"]}</h3>
-
             <div className="fact-card__source">
                 <p>{source_type + " · " + source_label}</p>
                 <blockquote>“{fact["source_text"]}”</blockquote>
             </div>
-
             <div
                 className="confidence"
                 aria-label={"Extraction confidence " + confidence_percent + " percent"}
@@ -62,7 +62,6 @@ def:pub FactCard(
                     <span style={{"width": confidence_percent + "%"}}></span>
                 </div>
             </div>
-
             <div className="fact-card__actions">
                 <button
                     className="decision-button decision-button--accept"

@@ -14,8 +14,8 @@ def:pub AssistantSection(
 ) -> JsxElement {
     status_dot_class: str = (
         "status-dot status-dot--active"
-        if is_transitioning else
-        "status-dot status-dot--ready"
+            if is_transitioning
+            else "status-dot status-dot--ready"
     );
 
     return
@@ -32,7 +32,6 @@ def:pub AssistantSection(
                     is_running={is_running}
                 />
             </div>
-
             <div className="assistant-copy">
                 <p className="assistant-status">
                     <span className={status_dot_class} aria-hidden="true"></span>

@@ -13,7 +13,10 @@ def:pub ClinicianVerification(
     on_reject: any
 ) -> JsxElement {
     return
-        <section className="panel intelligence-panel clinician-verification" aria-labelledby="clinician-verification-heading">
+        <section
+            className="panel intelligence-panel clinician-verification"
+            aria-labelledby="clinician-verification-heading"
+        >
             <div className="section-heading">
                 <div>
                     <p className="eyebrow">Evidence before analysis</p>
@@ -21,11 +24,15 @@ def:pub ClinicianVerification(
                 </div>
                 <span className="section-chip">{str(len(candidates))} candidates</span>
             </div>
-
             {(
                 <div className="verification-list">
                     {[
-                        <article className={"verification-row verification-row--" + decisionFor(decisions, candidate["id"])} key={candidate["id"]}>
+                        <article
+                            className={"verification-row verification-row--" + decisionFor(
+                                decisions, candidate["id"]
+                            )}
+                            key={candidate["id"]}
+                        >
                             <div className="verification-row__value">
                                 <span>{candidate["category"].replace("_", " ")}</span>
                                 <h3>{candidate["value"]}</h3>
@@ -37,20 +44,35 @@ def:pub ClinicianVerification(
                                 </div>
                                 <div>
                                     <strong>Translated sentence</strong>
-                                    <p>{translatedSource(translated_rows, candidate["source_text"])}</p>
+                                    <p>
+                                        {translatedSource(
+                                            translated_rows, candidate["source_text"]
+                                        )}
+                                    </p>
                                 </div>
                             </div>
                             <div className="verification-row__decision">
-                                <span className={"verification-state verification-state--" + decisionFor(decisions, candidate["id"])} role="status">
-                                    {decisionFor(decisions, candidate["id"]).replace("_", " ")}
+                                <span
+                                    className={"verification-state verification-state--" + decisionFor(
+                                        decisions, candidate["id"]
+                                    )}
+                                    role="status"
+                                >
+                                    {decisionFor(decisions, candidate["id"]).replace(
+                                        "_", " "
+                                    )}
                                 </span>
                                 <div>
                                     <button
                                         className="decision-button decision-button--accept"
                                         type="button"
                                         disabled={len(pending_action) > 0}
-                                        aria-pressed={decisionFor(decisions, candidate["id"]) == "accepted"}
-                                        onClick={lambda (_e: MouseEvent) { on_accept(candidate["id"]); }}
+                                        aria-pressed={decisionFor(
+                                            decisions, candidate["id"]
+                                        ) == "accepted"}
+                                        onClick={lambda (_e: MouseEvent) { on_accept(
+                                            candidate["id"]
+                                        ); }}
                                     >
                                         Accept
                                     </button>
@@ -58,22 +80,25 @@ def:pub ClinicianVerification(
                                         className="decision-button decision-button--reject"
                                         type="button"
                                         disabled={len(pending_action) > 0}
-                                        aria-pressed={decisionFor(decisions, candidate["id"]) == "rejected"}
-                                        onClick={lambda (_e: MouseEvent) { on_reject(candidate["id"]); }}
+                                        aria-pressed={decisionFor(
+                                            decisions, candidate["id"]
+                                        ) == "rejected"}
+                                        onClick={lambda (_e: MouseEvent) { on_reject(
+                                            candidate["id"]
+                                        ); }}
                                     >
                                         Reject
                                     </button>
                                 </div>
                             </div>
-                        </article>
-                        for candidate in candidates
+                        </article> for candidate in candidates
                     ]}
                 </div>
-                if len(candidates) > 0 else
-                <div className="intelligence-empty">
-                    <h3>No candidates awaiting verification</h3>
-                    <p>Load the backend-provided encounter fixture to begin.</p>
-                </div>
+                    if len(candidates) > 0
+                    else <div className="intelligence-empty">
+                        <h3>No candidates awaiting verification</h3>
+                        <p>Load the backend-provided encounter to begin.</p>
+                    </div>
             )}
         </section>;
 }
