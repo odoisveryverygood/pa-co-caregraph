@@ -249,6 +249,7 @@ def:pub app -> JsxElement {
     def incrementRecordingTimer -> None;
     def stopRecording -> None;
     def finishVoiceRecognition -> None;
+    def forceFinishVoiceRecognition(capture_id: str) -> None;
     def beginFinalizeCaptureById(capture_id: str) -> None;
     def finishStopRecording -> None;
     def receiveCaptureFinalized(response: any) -> None;
