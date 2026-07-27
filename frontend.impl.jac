@@ -1135,6 +1135,7 @@ impl app.receiveCaptureStart(response: any) -> None {
     }
     backend_connected = True;
     capture_session_id = response["capture_session"]["id"];
+    sessionStorage.setItem("hospi-pet-active-capture", capture_session_id);
     voice_runtime["capture_id"] = capture_session_id;
     voice_runtime["queue"] = [];
     voice_runtime["pending"] = False;
@@ -1514,7 +1515,9 @@ impl app.stopRecording -> None {
     }
     voice_runtime["finalize"] = True;
     voice_finalize_requested = True;
-    active_capture_id: str = str(voice_runtime["capture_id"]);
+    active_capture_id: str = str(
+        sessionStorage.getItem("hospi-pet-active-capture") or capture_session_id
+    );
     recognition: any = voice_runtime["recognition"];
     stream: any = voice_runtime["stream"];
     if stream is not None {
@@ -1561,11 +1564,7 @@ impl app.finishVoiceRecognition -> None {
 
 
 impl app.forceFinishVoiceRecognition(capture_id: str) -> None {
-    if (
-        len(capture_id) == 0
-        or str(voice_runtime["capture_id"]) != capture_id
-        or not voice_runtime["finalize"]
-    ) {
+    if len(capture_id) == 0 {
         return;
     }
     recognition: any = voice_runtime["recognition"];
@@ -1578,18 +1577,12 @@ impl app.forceFinishVoiceRecognition(capture_id: str) -> None {
     voice_recognition = None;
     voice_interim_text = "";
     voice_recording = False;
-    if voice_runtime["pending"] or len(voice_runtime["queue"]) > 0 {
-        flushVoiceRuntimeQueue();
-        voice_sequence_timer = setTimeout(
-            lambda() { forceFinishVoiceRecognition(capture_id); }, 750.0
-        );
-    } else {
-        beginFinalizeCaptureById(capture_id);
-    }
+    beginFinalizeCaptureById(capture_id);
 }
 
 
 impl app.beginFinalizeCaptureById(capture_id: str) -> None {
+    sessionStorage.removeItem("hospi-pet-active-capture");
     voice_runtime["finalize"] = False;
     voice_finalize_requested = False;
     callBackendAction(
@@ -1617,6 +1610,7 @@ impl app.finishStopRecording -> None {
     voice_sequence_timer = None;
     voice_recording = False;
     voice_stopping = False;
+    sessionStorage.removeItem("hospi-pet-active-capture");
     voice_status = "completed";
     assistant_state = "complete";
     assistant_status = "Recording complete — ready for review";
@@ -1871,6 +1865,7 @@ impl app.discardRecording -> None {
 
 impl app.stopVoiceCapture -> None {
     sessionStorage.removeItem("hospi-pet-microphone-request");
+    sessionStorage.removeItem("hospi-pet-active-capture");
     recognition: any = voice_runtime["recognition"];
     if recognition is not None {
         recognition.onresult = None;
