@@ -1670,22 +1670,18 @@ impl app.openCamera -> None {
     ).catch(
         cameraPermissionFailed
     );
-    document_timer = setTimeout(
-        lambda() {
-            document_requesting = False;
-            document_permission = "recoverable_error";
-            document_message = "The camera permission request timed out. Upload a synthetic image or try again.";
-            assistant_state = "idle";
-            assistant_status = "Camera unavailable";
-            assistant_message = "Use a synthetic upload or try camera access again.";
-        },
-        5000.0
-    );
+    document_timer = setTimeout(cameraPermissionTimedOut, 5000.0);
 }
 
 
 impl app.cameraPermissionGranted(stream: any) -> None {
     cancelDocumentTimer();
+    if document_permission != "requesting" {
+        for track in stream.getTracks() {
+            track.stop();
+        }
+        return;
+    }
     camera_stream = stream;
     camera_active = True;
     document_requesting = False;
