@@ -353,7 +353,7 @@ impl app.loadTranslations -> None {
     intelligence_pending_action = "translation";
     translation_status = "loading";
     intelligence_error_message = "";
-    if len(capture_session_id) > 0 and len(transcript_data) > 0 {
+    if len(transcript_data) > 0 {
         translation_chunk_index = 0;
         translateChunkAt(0, []);
     } elif len(capture_session_id) > 0 {
@@ -1129,6 +1129,12 @@ impl app.requestBrowserMicrophone -> None {
 
 impl app.voicePermissionGranted(stream: any) -> None {
     voice_sequence_timer = None;
+    if not voice_requesting {
+        for track in stream.getTracks() {
+            track.stop();
+        }
+        return;
+    }
     voice_stream = stream;
     voice_requesting = False;
     voice_permission = "granted";
@@ -1148,6 +1154,16 @@ impl app.voicePermissionFailed(error: any) -> None {
     voice_requesting = False;
     voice_recording = False;
     stopVoiceCapture();
+    if len(capture_session_id) > 0 {
+        callBackendAction(
+            "cancel_capture_session",
+            {
+                "capture_session_id": capture_session_id,
+                "session_id": "hospi-pet-frontend-demo"
+            }
+        );
+        capture_session_id = "";
+    }
     if error and error.name == "NotAllowedError" {
         voice_permission = "denied";
         voice_status = "failed";
@@ -1396,8 +1412,18 @@ impl app.receiveCaptureFinalized(response: any) -> None {
 
 
 impl app.loadPreparedVoiceDemo -> None {
-    if voice_requesting or voice_recording or voice_stopping {
+    if voice_recording or voice_stopping {
         return;
+    }
+    if voice_requesting and len(capture_session_id) > 0 {
+        callBackendAction(
+            "cancel_capture_session",
+            {
+                "capture_session_id": capture_session_id,
+                "session_id": "hospi-pet-frontend-demo"
+            }
+        );
+        capture_session_id = "";
     }
     resetIntelligence();
     cancelVoiceTimers();

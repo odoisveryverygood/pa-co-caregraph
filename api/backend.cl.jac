@@ -1,12 +1,6 @@
 """Small browser adapter for Jac generated-function endpoints."""
 
-import from "@jac/runtime" {
-    __getApiBaseUrl,
-    __getLocalStorage,
-    jacIsLoggedIn,
-    jacLogin,
-    jacSignup
-}
+import from "@jac/runtime" { __getApiBaseUrl, __getLocalStorage, jacLogin, jacSignup }
 
 sv import from ..endpoints {
     add_demo_contradiction,
@@ -63,9 +57,6 @@ def unwrapBackendEnvelope(payload: any) -> dict[str, any] {
 
 
 async def ensureDemoLogin -> None {
-    if jacIsLoggedIn() {
-        return;
-    }
     storage_key: str = "hospi-pet-demo-account";
     browser_storage: any = localStorage;
     browser_crypto: any = crypto;

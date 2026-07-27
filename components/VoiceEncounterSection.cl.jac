@@ -182,7 +182,7 @@ def:pub VoiceEncounterSection(
                 <button
                     className="button button--secondary"
                     type="button"
-                    disabled={is_requesting or is_recording}
+                    disabled={is_recording}
                     onClick={on_cancel_retry}
                 >
                     Cancel and Retry
@@ -190,7 +190,7 @@ def:pub VoiceEncounterSection(
                 <button
                     className="button button--secondary"
                     type="button"
-                    disabled={is_requesting or is_recording}
+                    disabled={is_recording}
                     onClick={on_prepared_demo}
                 >
                     Load Prepared Voice Demo
