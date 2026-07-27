@@ -155,6 +155,7 @@ impl app.resetDemo -> None {
     document_preview_url = "";
     document_label = "";
     document_source_id = "";
+    document_artifact_id = "";
     document_text = "";
     camera_active = False;
     document_stage_index = 0;
@@ -1669,7 +1670,17 @@ impl app.openCamera -> None {
     ).catch(
         cameraPermissionFailed
     );
-    document_timer = setTimeout(lambda() { cameraPermissionTimedOut(); }, 5000.0);
+    document_timer = setTimeout(
+        lambda() {
+            document_requesting = False;
+            document_permission = "recoverable_error";
+            document_message = "The camera permission request timed out. Upload a synthetic image or try again.";
+            assistant_state = "idle";
+            assistant_status = "Camera unavailable";
+            assistant_message = "Use a synthetic upload or try camera access again.";
+        },
+        5000.0
+    );
 }
 
 
@@ -1991,6 +2002,7 @@ impl app.receiveDocumentAnalysis(response: any) -> None {
     source_artifact: dict[str, any] = response["source_artifact"];
     document_text = text_block["text"];
     document_source_id = text_block["id"];
+    document_artifact_id = source_artifact["id"];
     document_label = source_artifact["display_name"];
     document_stage = "ready_for_review";
     document_message = response["message"];
@@ -2004,18 +2016,13 @@ impl app.receiveDocumentAnalysis(response: any) -> None {
 
 
 impl app.refreshDocumentExtraction -> None {
-    if len(document_label) == 0 {
+    if len(document_artifact_id) == 0 {
         return;
     }
     callBackendAction(
         "get_document_extraction",
         {
-            "source_artifact_id": (
-                document_candidates[0]["source_artifact_id"]
-                    if len(document_candidates) > 0
-                    and "source_artifact_id" in document_candidates[0]
-                    else ""
-            ),
+            "source_artifact_id": document_artifact_id,
             "session_id": "hospi-pet-frontend-demo"
         }
     ).then(
@@ -2077,6 +2084,7 @@ impl app.clearDocumentResults -> None {
     document_text = "";
     document_label = "";
     document_source_id = "";
+    document_artifact_id = "";
     document_candidates = [];
     document_file = None;
     document_message = "";

@@ -102,6 +102,7 @@ def:pub app -> JsxElement {
         document_preview_url: str = "",
         document_label: str = "",
         document_source_id: str = "",
+        document_artifact_id: str = "",
         document_text: str = "",
         camera_active: bool = False,
         camera_stream: any = None,
