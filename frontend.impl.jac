@@ -1526,6 +1526,7 @@ impl app.stopRecording -> None {
     if recognition is not None {
         recognition.onend = finishVoiceRecognition;
         recognition.stop();
+        voice_sequence_timer = setTimeout(finishVoiceRecognition, 1500.0);
     } else {
         finishVoiceRecognition();
     }
@@ -1533,6 +1534,10 @@ impl app.stopRecording -> None {
 
 
 impl app.finishVoiceRecognition -> None {
+    if voice_sequence_timer is not None {
+        clearTimeout(voice_sequence_timer);
+        voice_sequence_timer = None;
+    }
     recognition: any = voice_runtime["recognition"];
     if recognition is not None {
         recognition.onresult = None;
