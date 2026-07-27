@@ -1073,6 +1073,41 @@ impl app.startRecording -> None {
         return;
     }
 
+    if not demo_loaded {
+        callBackendAction("reset_demo", {"session_id": "hospi-pet-frontend-demo"}).then(
+            receiveVoiceBootstrap
+        ).catch(
+            failCaptureStart
+        );
+        return;
+    }
+    startLiveCapture();
+}
+
+
+impl app.receiveVoiceBootstrap(response: any) -> None {
+    if not response["success"] {
+        failCaptureStart(response);
+        return;
+    }
+    state: any = response["demo_state"];
+    patient_data = {
+        "name": state["patient"]["display_name"],
+        "encounter_type": "Synthetic live encounter",
+        "consultation_status": state["encounter"]["status"],
+        "encounter_date": state["encounter"]["occurred_at"],
+        "visit_id": state["encounter"]["id"],
+        "review_status": "Live capture in progress"
+    };
+    transcript_data = [];
+    candidate_facts = [];
+    demo_loaded = True;
+    backend_connected = True;
+    startLiveCapture();
+}
+
+
+impl app.startLiveCapture -> None {
     callBackendAction(
         "start_capture_session",
         {
@@ -1100,7 +1135,14 @@ impl app.receiveCaptureStart(response: any) -> None {
     }
     backend_connected = True;
     capture_session_id = response["capture_session"]["id"];
-    requestBrowserMicrophone();
+    voice_runtime["capture_id"] = capture_session_id;
+    voice_runtime["queue"] = [];
+    voice_runtime["pending"] = False;
+    voice_runtime["sequence"] = 1;
+    voice_runtime["finalize"] = False;
+    voice_runtime["rows"] = [];
+    voice_runtime["seconds"] = 0;
+    requestBrowserMicrophone(capture_session_id);
 }
 
 
@@ -1114,27 +1156,35 @@ impl app.failCaptureStart(error: any) -> None {
 }
 
 
-impl app.requestBrowserMicrophone -> None {
+impl app.requestBrowserMicrophone(capture_id: str) -> None {
     nav: any = navigator;
     if not nav.mediaDevices or not nav.mediaDevices.getUserMedia {
         simulateVoiceUnsupported();
         return;
     }
 
-    nav.mediaDevices.getUserMedia({"audio": True}).then(voicePermissionGranted).catch(
-        voicePermissionFailed
+    sessionStorage.setItem("hospi-pet-microphone-request", capture_id);
+    voice_sequence_timer = setTimeout(
+        lambda() { voicePermissionTimedOut(capture_id); }, 12000.0
+    );
+    nav.mediaDevices.getUserMedia({"audio": True}).then(
+        lambda (stream: any) { voicePermissionGranted(stream, capture_id); }
+    ).catch(
+        lambda (error: any) { voicePermissionFailed(error, capture_id); }
     );
 }
 
 
-impl app.voicePermissionGranted(stream: any) -> None {
-    voice_sequence_timer = None;
-    if not voice_requesting {
+impl app.voicePermissionGranted(stream: any, capture_id: str) -> None {
+    if sessionStorage.getItem("hospi-pet-microphone-request") != capture_id {
         for track in stream.getTracks() {
             track.stop();
         }
         return;
     }
+    sessionStorage.removeItem("hospi-pet-microphone-request");
+    voice_sequence_timer = None;
+    voice_runtime["stream"] = stream;
     voice_stream = stream;
     voice_requesting = False;
     voice_permission = "granted";
@@ -1149,21 +1199,21 @@ impl app.voicePermissionGranted(stream: any) -> None {
 }
 
 
-impl app.voicePermissionFailed(error: any) -> None {
+impl app.voicePermissionFailed(error: any, capture_id: str) -> None {
+    if sessionStorage.getItem("hospi-pet-microphone-request") != capture_id {
+        return;
+    }
+    sessionStorage.removeItem("hospi-pet-microphone-request");
     voice_sequence_timer = None;
     voice_requesting = False;
     voice_recording = False;
     stopVoiceCapture();
-    if len(capture_session_id) > 0 {
-        callBackendAction(
-            "cancel_capture_session",
-            {
-                "capture_session_id": capture_session_id,
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        );
-        capture_session_id = "";
-    }
+    callBackendAction(
+        "cancel_capture_session",
+        {"capture_session_id": capture_id, "session_id": "hospi-pet-frontend-demo"}
+    );
+    voice_runtime["capture_id"] = "";
+    capture_session_id = "";
     if error and error.name == "NotAllowedError" {
         voice_permission = "denied";
         voice_status = "failed";
@@ -1176,6 +1226,28 @@ impl app.voicePermissionFailed(error: any) -> None {
         assistant_message = "The microphone request can be tried again.";
     }
     assistant_state = "idle";
+}
+
+
+impl app.voicePermissionTimedOut(capture_id: str) -> None {
+    if sessionStorage.getItem("hospi-pet-microphone-request") != capture_id {
+        return;
+    }
+    sessionStorage.removeItem("hospi-pet-microphone-request");
+    voice_sequence_timer = None;
+    voice_requesting = False;
+    voice_recording = False;
+    voice_permission = "recoverable_error";
+    voice_status = "failed";
+    assistant_state = "idle";
+    assistant_status = "Microphone request timed out";
+    assistant_message = "Try again or use the prepared voice demo.";
+    callBackendAction(
+        "cancel_capture_session",
+        {"capture_session_id": capture_id, "session_id": "hospi-pet-frontend-demo"}
+    );
+    voice_runtime["capture_id"] = "";
+    capture_session_id = "";
 }
 
 
@@ -1194,13 +1266,22 @@ impl app.startBrowserTranscription -> None {
         return;
     }
 
-    voice_recognition = browser_window.Reflect.construct(speech_constructor, []);
-    voice_recognition.continuous = True;
-    voice_recognition.interimResults = True;
-    voice_recognition.lang = "en-US";
-    voice_recognition.onresult = handleSpeechResult;
-    voice_recognition.onerror = handleSpeechError;
-    voice_recognition.start();
+    try {
+        recognition: any = browser_window.Reflect.construct(speech_constructor, []);
+        recognition.continuous = True;
+        recognition.interimResults = True;
+        recognition.lang = "en-US";
+        recognition.onresult = handleSpeechResult;
+        recognition.onerror = handleSpeechError;
+        voice_runtime["recognition"] = recognition;
+        voice_recognition = recognition;
+        recognition.start();
+    } except Exception as error {
+        voice_permission = "recoverable_error";
+        voice_status = "fallback";
+        assistant_status = "Live transcription unavailable";
+        assistant_message = "Use the prepared voice demo in this browser.";
+    }
 }
 
 
@@ -1232,10 +1313,87 @@ impl app.handleSpeechError(event: any) -> None {
 
 
 impl app.queueFinalTranscript(text: str) -> None {
-    queued: list[dict[str, str]] = list(voice_chunk_queue);
+    queued: list[dict[str, str]] = list(voice_runtime["queue"]);
     queued.append({"speaker": voice_speaker, "text": text});
+    voice_runtime["queue"] = queued;
     voice_chunk_queue = queued;
-    sendNextTranscriptChunk();
+    flushVoiceRuntimeQueue();
+}
+
+
+impl app.flushVoiceRuntimeQueue -> None {
+    queued: list[dict[str, str]] = list(voice_runtime["queue"]);
+    capture_id: str = str(voice_runtime["capture_id"]);
+    if voice_runtime["pending"] or len(queued) == 0 or len(capture_id) == 0 {
+        if (
+            voice_runtime["finalize"]
+            and not voice_runtime["pending"]
+            and len(queued) == 0
+            and len(capture_id) > 0
+        ) {
+            beginFinalizeCaptureById(capture_id);
+        }
+        return;
+    }
+    current_chunk: dict[str, str] = queued[0];
+    voice_runtime["pending"] = True;
+    voice_chunk_pending = True;
+    callBackendAction(
+        "append_transcript_chunk",
+        {
+            "capture_session_id": capture_id,
+            "sequence": int(voice_runtime["sequence"]),
+            "speaker": current_chunk["speaker"],
+            "text": current_chunk["text"],
+            "confidence": 1.0,
+            "session_id": "hospi-pet-frontend-demo"
+        }
+    ).then(
+        receiveRuntimeTranscriptChunk
+    ).catch(
+        failRuntimeTranscriptChunk
+    );
+}
+
+
+impl app.receiveRuntimeTranscriptChunk(response: any) -> None {
+    voice_runtime["pending"] = False;
+    voice_chunk_pending = False;
+    if not response["success"] {
+        failRuntimeTranscriptChunk(response);
+        return;
+    }
+    rows: list[dict[str, any]] = list(voice_runtime["rows"]);
+    rows.append(response["transcript_chunk"]);
+    voice_runtime["rows"] = rows;
+    transcript_data = rows;
+    demo_loaded = True;
+    voice_runtime["sequence"] = int(voice_runtime["sequence"]) + 1;
+    queued: list[dict[str, str]] = list(voice_runtime["queue"]);
+    if len(queued) > 0 {
+        queued = queued[1:];
+    }
+    voice_runtime["queue"] = queued;
+    voice_chunk_queue = queued;
+    voice_next_sequence = int(voice_runtime["sequence"]);
+    flushVoiceRuntimeQueue();
+}
+
+
+impl app.failRuntimeTranscriptChunk(error: any) -> None {
+    voice_runtime["pending"] = False;
+    voice_runtime["finalize"] = False;
+    voice_chunk_pending = False;
+    voice_finalize_requested = False;
+    voice_stopping = False;
+    voice_status = "failed";
+    assistant_state = "idle";
+    assistant_status = "Transcript chunk needs retry";
+    assistant_message = (
+        error["message"]
+            if isinstance(error, dict) and "message" in error
+            else "The finalized speech could not be added. Cancel and retry or use the prepared fallback."
+    );
 }
 
 
@@ -1336,9 +1494,8 @@ impl app.simulateVoiceError -> None {
 
 
 impl app.incrementRecordingTimer -> None {
-    if voice_recording {
-        recording_seconds += 1;
-    }
+    voice_runtime["seconds"] = int(voice_runtime["seconds"]) + 1;
+    recording_seconds = int(voice_runtime["seconds"]);
 }
 
 
@@ -1355,29 +1512,58 @@ impl app.stopRecording -> None {
         clearInterval(voice_timer);
         voice_timer = None;
     }
-    stopVoiceCapture();
-    voice_interim_text = "";
+    voice_runtime["finalize"] = True;
     voice_finalize_requested = True;
-    if not voice_chunk_pending and len(voice_chunk_queue) == 0 {
-        beginFinalizeCapture();
+    recognition: any = voice_runtime["recognition"];
+    stream: any = voice_runtime["stream"];
+    if stream is not None {
+        for track in stream.getTracks() {
+            track.stop();
+        }
+        voice_runtime["stream"] = None;
+        voice_stream = None;
     }
+    if recognition is not None {
+        recognition.onend = finishVoiceRecognition;
+        recognition.stop();
+    } else {
+        finishVoiceRecognition();
+    }
+}
+
+
+impl app.finishVoiceRecognition -> None {
+    recognition: any = voice_runtime["recognition"];
+    if recognition is not None {
+        recognition.onresult = None;
+        recognition.onerror = None;
+        recognition.onend = None;
+    }
+    voice_runtime["recognition"] = None;
+    voice_recognition = None;
+    voice_interim_text = "";
+    flushVoiceRuntimeQueue();
+}
+
+
+impl app.beginFinalizeCaptureById(capture_id: str) -> None {
+    voice_runtime["finalize"] = False;
+    voice_finalize_requested = False;
+    callBackendAction(
+        "finalize_capture_session",
+        {"capture_session_id": capture_id, "session_id": "hospi-pet-frontend-demo"}
+    ).then(
+        receiveCaptureFinalized
+    ).catch(
+        failPreparedVoiceDemo
+    );
 }
 
 
 impl app.beginFinalizeCapture -> None {
     voice_finalize_requested = False;
     if len(capture_session_id) > 0 {
-        callBackendAction(
-            "finalize_capture_session",
-            {
-                "capture_session_id": capture_session_id,
-                "session_id": "hospi-pet-frontend-demo"
-            }
-        ).then(
-            receiveCaptureFinalized
-        ).catch(
-            failPreparedVoiceDemo
-        );
+        beginFinalizeCaptureById(capture_session_id);
     } else {
         voice_sequence_timer = setTimeout(finishStopRecording, 240.0);
     }
@@ -1402,6 +1588,10 @@ impl app.receiveCaptureFinalized(response: any) -> None {
     }
     voice_recording = False;
     voice_stopping = False;
+    voice_runtime["capture_id"] = "";
+    voice_runtime["pending"] = False;
+    voice_runtime["finalize"] = False;
+    voice_runtime["queue"] = [];
     voice_status = response["capture_session"]["status"];
     voice_interim_text = "";
     candidate_facts = response["candidate_facts"];
@@ -1415,11 +1605,12 @@ impl app.loadPreparedVoiceDemo -> None {
     if voice_recording or voice_stopping {
         return;
     }
-    if voice_requesting and len(capture_session_id) > 0 {
+    pending_capture_id: str = str(voice_runtime["capture_id"]);
+    if voice_requesting and len(pending_capture_id) > 0 {
         callBackendAction(
             "cancel_capture_session",
             {
-                "capture_session_id": capture_session_id,
+                "capture_session_id": pending_capture_id,
                 "session_id": "hospi-pet-frontend-demo"
             }
         );
@@ -1540,11 +1731,12 @@ impl app.failPreparedVoiceDemo(error: any) -> None {
 
 
 impl app.cancelAndRetryVoice -> None {
-    if len(capture_session_id) > 0 and voice_status != "completed" {
+    active_capture_id: str = str(voice_runtime["capture_id"]);
+    if len(active_capture_id) > 0 and voice_status != "completed" {
         callBackendAction(
             "cancel_capture_session",
             {
-                "capture_session_id": capture_session_id,
+                "capture_session_id": active_capture_id,
                 "session_id": "hospi-pet-frontend-demo"
             }
         );
@@ -1593,11 +1785,12 @@ impl app.discardRecording -> None {
     ) {
         return;
     }
-    if len(capture_session_id) > 0 and voice_status != "completed" {
+    active_capture_id: str = str(voice_runtime["capture_id"]);
+    if len(active_capture_id) > 0 and voice_status != "completed" {
         callBackendAction(
             "cancel_capture_session",
             {
-                "capture_session_id": capture_session_id,
+                "capture_session_id": active_capture_id,
                 "session_id": "hospi-pet-frontend-demo"
             }
         );
@@ -1634,16 +1827,29 @@ impl app.discardRecording -> None {
 
 
 impl app.stopVoiceCapture -> None {
-    if voice_recognition is not None {
-        voice_recognition.onresult = None;
-        voice_recognition.onerror = None;
-        voice_recognition.stop();
-        voice_recognition = None;
+    sessionStorage.removeItem("hospi-pet-microphone-request");
+    recognition: any = voice_runtime["recognition"];
+    if recognition is not None {
+        recognition.onresult = None;
+        recognition.onerror = None;
+        recognition.onend = None;
+        recognition.stop();
     }
-    if voice_stream is not None {
-        for track in voice_stream.getTracks() {
+    stream: any = voice_runtime["stream"];
+    if stream is not None {
+        for track in stream.getTracks() {
             track.stop();
         }
+        voice_runtime["recognition"] = None;
+        voice_runtime["stream"] = None;
+        voice_runtime["capture_id"] = "";
+        voice_runtime["queue"] = [];
+        voice_runtime["pending"] = False;
+        voice_runtime["sequence"] = 1;
+        voice_runtime["finalize"] = False;
+        voice_runtime["rows"] = [];
+        voice_runtime["seconds"] = 0;
+        voice_recognition = None;
         voice_stream = None;
     }
 }
@@ -1679,7 +1885,12 @@ impl app.openCamera -> None {
     assistant_message = "Waiting for browser permission.";
 
     nav: any = navigator;
+    browser_window: any = window;
+    browser_crypto: any = browser_window.crypto;
+    request_token: str = str(browser_crypto.randomUUID());
+    sessionStorage.setItem("hospi-pet-camera-request", request_token);
     if not nav.mediaDevices or not nav.mediaDevices.getUserMedia {
+        sessionStorage.removeItem("hospi-pet-camera-request");
         document_requesting = False;
         document_permission = "unsupported";
         document_message = "Camera capture is unsupported. Upload a synthetic image instead.";
@@ -1692,22 +1903,25 @@ impl app.openCamera -> None {
     nav.mediaDevices.getUserMedia(
         {"video": {"facingMode": "environment"}, "audio": False}
     ).then(
-        cameraPermissionGranted
+        lambda (stream: any) { cameraPermissionGranted(stream, request_token); }
     ).catch(
-        cameraPermissionFailed
+        lambda (error: any) { cameraPermissionFailed(error, request_token); }
     );
-    document_timer = setTimeout(cameraPermissionTimedOut, 5000.0);
+    document_timer = setTimeout(
+        lambda() { cameraPermissionTimedOut(request_token); }, 5000.0
+    );
 }
 
 
-impl app.cameraPermissionGranted(stream: any) -> None {
-    cancelDocumentTimer();
-    if document_permission != "requesting" {
+impl app.cameraPermissionGranted(stream: any, request_token: str) -> None {
+    if sessionStorage.getItem("hospi-pet-camera-request") != request_token {
         for track in stream.getTracks() {
             track.stop();
         }
         return;
     }
+    sessionStorage.removeItem("hospi-pet-camera-request");
+    cancelDocumentTimer();
     camera_stream = stream;
     camera_active = True;
     document_requesting = False;
@@ -1717,11 +1931,15 @@ impl app.cameraPermissionGranted(stream: any) -> None {
     assistant_state = "idle";
     assistant_status = "Document camera ready";
     assistant_message = "Take a photo when the synthetic document is in view.";
-    setTimeout(attachCameraStream, 0.0);
+    setTimeout(lambda() { attachCameraStream(stream); }, 50.0);
 }
 
 
-impl app.cameraPermissionFailed(error: any) -> None {
+impl app.cameraPermissionFailed(error: any, request_token: str) -> None {
+    if sessionStorage.getItem("hospi-pet-camera-request") != request_token {
+        return;
+    }
+    sessionStorage.removeItem("hospi-pet-camera-request");
     cancelDocumentTimer();
     document_requesting = False;
     stopCameraCapture();
@@ -1738,23 +1956,25 @@ impl app.cameraPermissionFailed(error: any) -> None {
 }
 
 
-impl app.cameraPermissionTimedOut -> None {
-    document_timer = None;
-    if document_requesting {
-        document_requesting = False;
-        document_permission = "recoverable_error";
-        document_message = "The camera permission request timed out. Upload a synthetic image or try again.";
-        assistant_state = "idle";
-        assistant_status = "Camera unavailable";
-        assistant_message = "Use a synthetic upload or try camera access again.";
+impl app.cameraPermissionTimedOut(request_token: str) -> None {
+    if sessionStorage.getItem("hospi-pet-camera-request") != request_token {
+        return;
     }
+    sessionStorage.removeItem("hospi-pet-camera-request");
+    document_timer = None;
+    document_requesting = False;
+    document_permission = "recoverable_error";
+    document_message = "The camera permission request timed out. Upload a synthetic image or try again.";
+    assistant_state = "idle";
+    assistant_status = "Camera unavailable";
+    assistant_message = "Use a synthetic upload or try camera access again.";
 }
 
 
-impl app.attachCameraStream -> None {
+impl app.attachCameraStream(stream: any) -> None {
     video: any = document.getElementById("document-camera-video");
-    if video is not None and camera_stream is not None {
-        video.srcObject = camera_stream;
+    if video is not None {
+        video.srcObject = stream;
     }
 }
 
@@ -1765,7 +1985,7 @@ impl app.handleDocumentUpload(e: any) -> None {
     }
     if document_requesting {
         document_requesting = False;
-        cancelDocumentTimer();
+        sessionStorage.removeItem("hospi-pet-camera-request");
     }
     files: any = e.target.files;
     if files is None or len(files) == 0 {
@@ -1818,11 +2038,13 @@ impl app.takePhoto -> None {
         return;
     }
     canvas: any = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    max_edge: float = 1280.0;
+    scale: float = min(1.0, max_edge / max(video.videoWidth, video.videoHeight));
+    canvas.width = int(video.videoWidth * scale);
+    canvas.height = int(video.videoHeight * scale);
     context: any = canvas.getContext("2d");
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    document_preview_url = canvas.toDataURL("image/jpeg", 0.9);
+    document_preview_url = canvas.toDataURL("image/jpeg", 0.75);
     document_file = None;
     document_source_type = "Camera";
     document_file_name = "captured-synthetic-document.jpg";
@@ -2093,6 +2315,7 @@ impl app.cancelDocumentTimer -> None {
 
 
 impl app.stopCameraCapture -> None {
+    sessionStorage.removeItem("hospi-pet-camera-request");
     if camera_stream is not None {
         for track in camera_stream.getTracks() {
             track.stop();

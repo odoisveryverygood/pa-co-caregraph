@@ -90,6 +90,17 @@ def:pub app -> JsxElement {
         voice_timer: float | None = None,
         voice_sequence_timer: float | None = None,
         voice_stream: any = None,
+        voice_runtime: any = {
+            "capture_id": "",
+            "recognition": None,
+            "stream": None,
+            "queue": [],
+            "pending": False,
+            "sequence": 1,
+            "finalize": False,
+            "rows": [],
+            "seconds": 0
+        },
         capture_session_id: str = "",
         document_permission: str = "not_requested",
         document_scenario: str = "lab_success",
@@ -213,15 +224,21 @@ def:pub app -> JsxElement {
     def changeVoiceScenario(e: any) -> None;
     def changeVoiceSpeaker(e: any) -> None;
     def startRecording -> None;
+    def receiveVoiceBootstrap(response: any) -> None;
+    def startLiveCapture -> None;
     def receiveCaptureStart(response: any) -> None;
     def failCaptureStart(error: any) -> None;
-    def requestBrowserMicrophone -> None;
-    def voicePermissionGranted(stream: any) -> None;
-    def voicePermissionFailed(error: any) -> None;
+    def requestBrowserMicrophone(capture_id: str) -> None;
+    def voicePermissionGranted(stream: any, capture_id: str) -> None;
+    def voicePermissionFailed(error: any, capture_id: str) -> None;
+    def voicePermissionTimedOut(capture_id: str) -> None;
     def startBrowserTranscription -> None;
     def handleSpeechResult(event: any) -> None;
     def handleSpeechError(event: any) -> None;
     def queueFinalTranscript(text: str) -> None;
+    def flushVoiceRuntimeQueue -> None;
+    def receiveRuntimeTranscriptChunk(response: any) -> None;
+    def failRuntimeTranscriptChunk(error: any) -> None;
     def sendNextTranscriptChunk -> None;
     def receiveTranscriptChunk(response: any) -> None;
     def failTranscriptChunk(error: any) -> None;
@@ -231,6 +248,8 @@ def:pub app -> JsxElement {
     def simulateVoiceError -> None;
     def incrementRecordingTimer -> None;
     def stopRecording -> None;
+    def finishVoiceRecognition -> None;
+    def beginFinalizeCaptureById(capture_id: str) -> None;
     def finishStopRecording -> None;
     def receiveCaptureFinalized(response: any) -> None;
     def loadPreparedVoiceDemo -> None;
@@ -245,10 +264,10 @@ def:pub app -> JsxElement {
     def cancelVoiceTimers -> None;
     def changeDocumentScenario(e: any) -> None;
     def openCamera -> None;
-    def cameraPermissionGranted(stream: any) -> None;
-    def cameraPermissionFailed(error: any) -> None;
-    def cameraPermissionTimedOut -> None;
-    def attachCameraStream -> None;
+    def cameraPermissionGranted(stream: any, request_token: str) -> None;
+    def cameraPermissionFailed(error: any, request_token: str) -> None;
+    def cameraPermissionTimedOut(request_token: str) -> None;
+    def attachCameraStream(stream: any) -> None;
     def handleDocumentUpload(e: any) -> None;
     def takePhoto -> None;
     def retakeDocument -> None;
