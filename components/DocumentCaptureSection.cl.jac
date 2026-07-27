@@ -70,7 +70,7 @@ def:pub DocumentCaptureSection(
                         <input
                             type="file"
                             accept="image/jpeg,image/png,image/webp"
-                            disabled={is_requesting or is_processing}
+                            disabled={is_processing}
                             onChange={on_file_change}
                         />
                     </label>

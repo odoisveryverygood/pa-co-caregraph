@@ -1,0 +1,4 @@
+[deploy]
+healthcheckPath = "/openapi.json"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"

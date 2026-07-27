@@ -1734,8 +1734,12 @@ impl app.attachCameraStream -> None {
 
 
 impl app.handleDocumentUpload(e: any) -> None {
-    if document_processing or document_requesting {
+    if document_processing {
         return;
+    }
+    if document_requesting {
+        document_requesting = False;
+        cancelDocumentTimer();
     }
     files: any = e.target.files;
     if files is None or len(files) == 0 {
